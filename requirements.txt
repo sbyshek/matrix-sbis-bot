@@ -1,0 +1,5 @@
+matrix-nio
+python-dotenv
+ldap3
+netmiko
+pydantic

@@ -1,0 +1,16 @@
+services:
+  matrix-sbis-bot:
+    build: .
+    env_file:
+      - .env
+    container_name: matrix-sbis-bot
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs      # Логи бота
+      - ./data:/app/data      # connection_state.json и pending_users.json
+    networks:
+      - sbis-bot-network
+
+networks:
+  sbis-bot-network:
+    driver: bridge
