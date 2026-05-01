@@ -11,6 +11,7 @@ USERNAME = os.getenv("MATRIX_BOT_USERNAME")
 PASSWORD = os.getenv("MATRIX_BOT_PASSWORD")
 TARGET_ROOM = os.getenv("MATRIX_ROOM_ID", "").strip() or None
 MATRIX_DOMAIN = os.getenv("MATRIX_DOMAIN", "matrix.vpk-oil.ru")
+ADMIN_ROOM_ID = os.getenv("ADMIN_ROOM_ID")
 
 # === LDAP (из старого бота) ===
 LDAP_SERVER = os.getenv("LDAP_SERVER")

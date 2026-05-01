@@ -1,0 +1,6 @@
+matrix-nio
+python-dotenv
+pysmb==1.2.13
+PyMuPDF
+pandas
+openpyxl

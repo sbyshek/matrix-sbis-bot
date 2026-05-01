@@ -1,16 +1,59 @@
 services:
-  matrix-sbis-bot:
-    build: .
-    env_file:
-      - .env
-    container_name: matrix-sbis-bot
+  # 🔹 Общий Redis для кэширования и сессий
+  redis:
+    build: ./infra/redis
+    container_name: matrix-redis
     restart: unless-stopped
+    environment:
+      - REDIS_PASSWORD=changeme_strong_password  # ⚠️ Поменяй в .env или здесь
     volumes:
-      - ./logs:/app/logs      # Логи бота
-      - ./data:/app/data      # connection_state.json и pending_users.json
+      - redis_data:/data
     networks:
-      - sbis-bot-network
+      - matrix-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
+  # 🔹 VPN Bot (переехал в vpn_bot/)
+  sbis-bot:
+    build: ./sbis_bot
+    container_name: matrix-vpn-bot
+    env_file: ./sbis_bot/.env
+    volumes:
+      - ./sbis_bot/app:/app/app      # Live-reload
+      - ./sbis_bot/data:/app/data    # Состояние
+      - ./sbis_bot/logs:/app/logs    # Логи
+    restart: unless-stopped
+    depends_on: [redis]
+    networks: [matrix-net]
+
+  # 🔹 Auto Bot (новый проект)
+  auto-bot:
+    build: ./auto_bot
+    container_name: matrix-auto-bot
+    env_file: ./auto_bot/.env
+    volumes:
+      - ./auto_bot/app:/app/app     # Live-reload
+      - ./auto_bot/logs:/app/logs   # Логи
+    restart: unless-stopped
+    depends_on: [redis]
+    networks: [matrix-net]
+
+  registry-bot:
+    build: ./registry_bot
+    container_name: matrix-registry-bot
+    env_file: ./registry_bot/.env
+    volumes:
+      - ./registry_bot/data:/app/data
+      - ./registry_bot/app:/app/app
+      - ./registry_bot/logs:/app/logs
+    restart: unless-stopped
+    networks: [matrix-net]
 networks:
-  sbis-bot-network:
+  matrix-net:
     driver: bridge
+
+volumes:
+  redis_data:

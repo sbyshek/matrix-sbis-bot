@@ -56,13 +56,29 @@ class MatrixVPNBot:
             logger.error(f"Failed to send message: {e}")
 
     async def notify_admins(self, message: str):
-        """Отправка уведомления администраторам"""
-        if not self.admin_ids:
-            return
-        mentions = " ".join(self.admin_ids)
-        target = self.room_id 
-        if target:
-            await self.send_message(target, f"⚠️ {mentions}\n{message}")
+        """Отправка уведомления администраторам в специальную комнату"""
+        # Приоритет 1: Отправляем в ADMIN_ROOM_ID если задан
+        if config.ADMIN_ROOM_ID:
+            try:
+                mentions = " ".join(config.ADMIN_LOGINS) if config.ADMIN_LOGINS else ""
+                full_message = f"⚠️ АДМИНИСТРАТОРАМ\n{message}"
+                if mentions:
+                    full_message = f"⚠️ {mentions}\n{message}"
+                await self.send_message(config.ADMIN_ROOM_ID, full_message)
+                logger.info(f"Notification sent to admin room {config.ADMIN_ROOM_ID}")
+                return
+            except Exception as e:
+                logger.error(f"Failed to send to admin room: {e}")
+        
+        # Приоритет 2: Если ADMIN_ROOM_ID не задан, пробуем отправить в TARGET_ROOM
+        if self.room_id:
+            try:
+                mentions = " ".join(config.ADMIN_LOGINS) if config.ADMIN_LOGINS else ""
+                full_message = f"⚠️ {mentions}\n{message}" if mentions else f"⚠️ {message}"
+                await self.send_message(self.room_id, full_message)
+                logger.info(f"Notification sent to target room {self.room_id}")
+            except Exception as e:
+                logger.error(f"Failed to send notification: {e}")
 
     def extract_login(self, sender: str) -> str:
         try:
