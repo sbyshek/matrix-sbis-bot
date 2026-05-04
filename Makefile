@@ -124,3 +124,19 @@ logs-reg: ##  Логи Registry Bot
 
 shell-reg: ## 🐚 Bash в Registry Bot
 	$(COMPOSE) exec registry-bot bash
+
+
+up-alert: ## 🚀 Запустить Alert API + Bot
+	$(COMPOSE) up -d alert_api alert_bot
+
+down-alert: ##  Остановить Alert сервисы
+	$(COMPOSE) stop alert_api alert_bot
+
+restart-alert: ##  Рестарт Alert сервисов
+	$(COMPOSE) restart alert_api alert_bot
+
+logs-alert: ##  Логи Alert сервисов
+	$(COMPOSE) logs -f alert_bot
+
+logs-api: ##  Логи Alert API
+	$(COMPOSE) logs -f alert_api

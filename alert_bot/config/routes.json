@@ -1,0 +1,9 @@
+{
+  "default_room": "!XoCCkvGUxhdBmujayz:matrix.vpk-oil.ru",
+  "mappings": {
+    "scada_critical": "!tech_room:matrix.vpk-oil.ru",
+    "erp_accounting": "!buh_room:matrix.vpk-oil.ru",
+    "cctv_security": "!security_room:matrix.vpk-oil.ru",
+    "fire_alarm": "!security_room:matrix.vpk-oil.ru" 
+  }
+}

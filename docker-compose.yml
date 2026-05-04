@@ -4,8 +4,15 @@ services:
     build: ./infra/redis
     container_name: matrix-redis
     restart: unless-stopped
+    env_file: .env
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"      # Макс. размер одного файла
+        max-file: "5"        # Хранить последние 5 файлов (~100 МБ)
+        compress: "true"     # Сжимать старые файлы (gzip)
     environment:
-      - REDIS_PASSWORD=changeme_strong_password  # ⚠️ Поменяй в .env или здесь
+      - REDIS_PASSWORD=${REDIS_PASSWORD}  # ⚠️ Поменяй в .env или здесь
     volumes:
       - redis_data:/data
     networks:
@@ -26,6 +33,12 @@ services:
       - ./sbis_bot/data:/app/data    # Состояние
       - ./sbis_bot/logs:/app/logs    # Логи
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"      # Макс. размер одного файла
+        max-file: "5"        # Хранить последние 5 файлов (~100 МБ)
+        compress: "true"     # Сжимать старые файлы (gzip)
     depends_on: [redis]
     networks: [matrix-net]
 
@@ -39,6 +52,12 @@ services:
       - ./auto_bot/app:/app/app     # Live-reload
       - ./auto_bot/logs:/app/logs   # Логи
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"      # Макс. размер одного файла
+        max-file: "5"        # Хранить последние 5 файлов (~100 МБ)
+        compress: "true"     # Сжимать старые файлы (gzip)
     depends_on: [redis]
     networks: [matrix-net]
 
@@ -51,7 +70,57 @@ services:
       - ./registry_bot/app:/app/app
       - ./registry_bot/logs:/app/logs
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"      # Макс. размер одного файла
+        max-file: "5"        # Хранить последние 5 файлов (~100 МБ)
+        compress: "true"     # Сжимать старые файлы (gzip)
     networks: [matrix-net]
+
+  alert_api:
+    build: ./alert_api
+    container_name: matrix-alert-api
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"      # Макс. размер одного файла
+        max-file: "5"        # Хранить последние 5 файлов (~100 МБ)
+        compress: "true"     # Сжимать старые файлы (gzip)
+    env_file: .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "8765:8000"  # ← Хост:Контейнер
+    volumes:
+      - ./alert_api/logs:/app/logs
+      - ./alert_api/app:/app/app
+    networks: [matrix-net]
+    depends_on: [redis]
+
+  alert_bot:
+    build: ./alert_bot
+    container_name: matrix-alert-bot
+    env_file: ./alert_bot/.env
+    environment:  
+      - TIMEZONE=${TIMEZONE}  
+    volumes:
+      - ./alert_bot/app:/app/app
+      - ./alert_bot/data:/app/data
+      - ./alert_bot/logs:/app/logs
+      - ./alert_bot/config:/app/config
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"      # Макс. размер одного файла
+        max-file: "5"        # Хранить последние 5 файлов (~100 МБ)
+        compress: "true"     # Сжимать старые файлы (gzip)
+    networks: [matrix-net]
+    depends_on: [alert_api, redis]
+
 networks:
   matrix-net:
     driver: bridge

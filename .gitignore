@@ -4,3 +4,11 @@ __pycache__/
 logs/
 data/
 .venv/
+
+# Bot data & runtime files
+*/data/
+*/logs/
+*.jsonl
+*cursor.json
+*.pyc
+__pycache__/

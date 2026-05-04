@@ -436,6 +436,7 @@ class MatrixVPNBot:
         except Exception as e:
             logger.error(f"Failed to join room {room_id}: {e}")
 
+    # Первый вариант
     # async def run(self):
     #     if not await self.login():
     #         return
@@ -467,37 +468,54 @@ class MatrixVPNBot:
     #             logger.error(f"❌ Ошибка в цикле синхронизации: {e}")
     #             await asyncio.sleep(5)
 
+    # Второй вариант
     async def run(self):
-            if not await self.login(): return
-            
-            # Загружаем последний токен синхронизации
-            token = load_token()
-            logger.info(f"👂 Bot listening... (token: {token or 'None'})")
-            
-            while True:
-                try:
-                    resp = await self.client.sync(timeout=30000, since=token)
-                    if not isinstance(resp, SyncResponse):
-                        await asyncio.sleep(5); continue
-                    
-                    # ✅ Сохраняем новый токен сразу
-                    token = resp.next_batch
-                    save_token(token)
-                    
-                    now_ms = int(time.time() * 1000)
-                    
-                    for rid, rdata in resp.rooms.join.items():
-                        for ev in rdata.timeline.events:
-                            if isinstance(ev, RoomMessageText):
-                                # ⏱️ Игнорируем сообщения, отправленные >60 сек назад
-                                if hasattr(ev, 'server_timestamp') and (now_ms - ev.server_timestamp > 60000):
-                                    continue
-                                await self.message_handler(rid, ev)
-                                
-                except Exception as e:
-                    logger.error(f"Sync error: {e}"); await asyncio.sleep(5)
+        if not await self.login():
+            return
 
-    
+        token = load_token()
+        logger.info(f"👂 Bot starting... (token present: {bool(token)})")
+
+        # 🔹 Первый sync: подгружаем состояние комнат + новые события
+        # full_state=True восстанавливает контекст комнат, чтобы диалоги не ломались
+        resp = await self.client.sync(timeout=30000, since=token, full_state=True)
+        if not isinstance(resp, SyncResponse):
+            logger.error("❌ Initial sync failed"); return
+
+        token = resp.next_batch
+        save_token(token)
+
+        # Обрабатываем только свежие события (защита от replay)
+        now_ms = int(time.time() * 1000)
+        for rid, rdata in resp.rooms.join.items():
+            for ev in rdata.timeline.events:
+                if isinstance(ev, RoomMessageText):
+                    if hasattr(ev, 'server_timestamp') and (now_ms - ev.server_timestamp > 60000):
+                        continue
+                    await self.message_handler(rid, ev)
+
+        logger.info("✅ State synced. Entering incremental loop...")
+
+        # 🔹 Дальше работаем в обычном инкрементальном режиме
+        while True:
+            try:
+                resp = await self.client.sync(timeout=30000, since=token)
+                if not isinstance(resp, SyncResponse):
+                    await asyncio.sleep(5); continue
+
+                token = resp.next_batch
+                save_token(token)
+
+                now_ms = int(time.time() * 1000)
+                for rid, rdata in resp.rooms.join.items():
+                    for ev in rdata.timeline.events:
+                        if isinstance(ev, RoomMessageText):
+                            if hasattr(ev, 'server_timestamp') and (now_ms - ev.server_timestamp > 60000):
+                                continue
+                            await self.message_handler(rid, ev)
+                            
+            except Exception as e:
+                logger.error(f"Sync error: {e}"); await asyncio.sleep(5)
 
 
     async def close(self):
