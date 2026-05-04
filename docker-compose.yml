@@ -35,6 +35,7 @@ services:
     container_name: matrix-auto-bot
     env_file: ./auto_bot/.env
     volumes:
+      - ./auto_bot/data:/app/data
       - ./auto_bot/app:/app/app     # Live-reload
       - ./auto_bot/logs:/app/logs   # Логи
     restart: unless-stopped

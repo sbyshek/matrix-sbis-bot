@@ -4,7 +4,9 @@ import logging
 from datetime import datetime, timezone, timedelta
 from nio import AsyncClient, SyncResponse, RoomMessageText, LoginResponse, ReactionEvent
 import config
+import time
 from service.glonass_api import GlonassClient
+from token_manager import load_token, save_token
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -171,37 +173,70 @@ class AutoBot:
         # 🔹 Если пользователь пишет текст -> показываем меню
         await self.send(room, "Используйте кнопки ниже для навигации:\n" + self.get_main_menu(self.get_role(sender)))
 
-    async def run(self):
-        if not await self.login(): 
-            return
+    # async def run(self):
+    #     if not await self.login(): 
+    #         return
         
-        logger.info("👂 AutoBot listening (Element Quick Replies mode)...")
-        token = None
+    #     logger.info("👂 AutoBot listening (Element Quick Replies mode)...")
+    #     token = None
+        
+    #     while True:
+    #         try:
+    #             resp = await self.client.sync(timeout=30000, since=token)
+    #             if not isinstance(resp, SyncResponse):
+    #                 await asyncio.sleep(5)
+    #                 continue
+    #             token = resp.next_batch
+
+    #             # Авто-вступление в ЛС
+    #             for rid in resp.rooms.invite.keys():
+    #                 await self.client.join(rid)
+    #                 await self.send(rid, " Привет! Я бот мониторинга транспорта.")
+    #                 # Отправляем меню сразу (проверка ролей произойдёт при клике)
+    #                 await self.send(rid, self.get_main_menu("all"))
+                    
+    #             # Чтение сообщений
+    #             for rid, rdata in resp.rooms.join.items():
+    #                 for ev in rdata.timeline.events:
+    #                     if isinstance(ev, RoomMessageText):
+    #                         await self.message_handler(rid, ev)
+                            
+    #         except Exception as e:
+    #             logger.error(f"Sync error: {e}")
+    #             await asyncio.sleep(5)
+    
+    
+    async def run(self):
+        if not await self.login(): return
+        
+        # Загружаем последний токен синхронизации
+        token = load_token()
+        logger.info(f"👂 Bot listening... (token: {token or 'None'})")
         
         while True:
             try:
                 resp = await self.client.sync(timeout=30000, since=token)
                 if not isinstance(resp, SyncResponse):
-                    await asyncio.sleep(5)
-                    continue
+                    await asyncio.sleep(5); continue
+                
+                # ✅ Сохраняем новый токен сразу
                 token = resp.next_batch
-
-                # Авто-вступление в ЛС
-                for rid in resp.rooms.invite.keys():
-                    await self.client.join(rid)
-                    await self.send(rid, " Привет! Я бот мониторинга транспорта.")
-                    # Отправляем меню сразу (проверка ролей произойдёт при клике)
-                    await self.send(rid, self.get_main_menu("all"))
-                    
-                # Чтение сообщений
+                save_token(token)
+                
+                now_ms = int(time.time() * 1000)
+                
                 for rid, rdata in resp.rooms.join.items():
                     for ev in rdata.timeline.events:
                         if isinstance(ev, RoomMessageText):
+                            # ⏱️ Игнорируем сообщения, отправленные >60 сек назад
+                            if hasattr(ev, 'server_timestamp') and (now_ms - ev.server_timestamp > 60000):
+                                continue
                             await self.message_handler(rid, ev)
                             
             except Exception as e:
-                logger.error(f"Sync error: {e}")
-                await asyncio.sleep(5)
+                logger.error(f"Sync error: {e}"); await asyncio.sleep(5)
+
+    
 
     async def close(self):
         await self.client.close()

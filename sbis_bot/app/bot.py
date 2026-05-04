@@ -1,10 +1,11 @@
 import asyncio
 import re
-import logging
+import time
 import os
 from datetime import datetime, timezone
 from collections import deque
 from nio import AsyncClient, SyncResponse, RoomMessageText, LoginResponse
+from token_manager import load_token, save_token
 
 # Настройка логирования
 from logger_config import setup_logging, get_logger
@@ -435,39 +436,72 @@ class MatrixVPNBot:
         except Exception as e:
             logger.error(f"Failed to join room {room_id}: {e}")
 
+    # async def run(self):
+    #     if not await self.login():
+    #         return
+        
+    #     logger.info("👂 Бот слушает сообщения...")
+    #     sync_token = None
+        
+    #     while True:
+    #         try:
+    #             response = await self.client.sync(timeout=30000, since=sync_token)
+                
+    #             if not isinstance(response, SyncResponse):
+    #                 await asyncio.sleep(5)
+    #                 continue
+                
+    #             sync_token = response.next_batch
+
+    #             # 1. Обработка приглашений (Личных сообщений)
+    #             for invite_id in response.rooms.invite.keys():
+    #                 await self.handle_invite(invite_id)
+
+    #             # 2. Обработка сообщений
+    #             for room_id, room_data in response.rooms.join.items():
+    #                 for event in room_data.timeline.events:
+    #                     if isinstance(event, RoomMessageText):
+    #                         await self.message_handler(room_id, event)
+
+    #         except Exception as e:
+    #             logger.error(f"❌ Ошибка в цикле синхронизации: {e}")
+    #             await asyncio.sleep(5)
+
     async def run(self):
-        if not await self.login():
-            return
-        
-        logger.info("👂 Бот слушает сообщения...")
-        sync_token = None
-        
-        while True:
-            try:
-                response = await self.client.sync(timeout=30000, since=sync_token)
-                
-                if not isinstance(response, SyncResponse):
-                    await asyncio.sleep(5)
-                    continue
-                
-                sync_token = response.next_batch
+            if not await self.login(): return
+            
+            # Загружаем последний токен синхронизации
+            token = load_token()
+            logger.info(f"👂 Bot listening... (token: {token or 'None'})")
+            
+            while True:
+                try:
+                    resp = await self.client.sync(timeout=30000, since=token)
+                    if not isinstance(resp, SyncResponse):
+                        await asyncio.sleep(5); continue
+                    
+                    # ✅ Сохраняем новый токен сразу
+                    token = resp.next_batch
+                    save_token(token)
+                    
+                    now_ms = int(time.time() * 1000)
+                    
+                    for rid, rdata in resp.rooms.join.items():
+                        for ev in rdata.timeline.events:
+                            if isinstance(ev, RoomMessageText):
+                                # ⏱️ Игнорируем сообщения, отправленные >60 сек назад
+                                if hasattr(ev, 'server_timestamp') and (now_ms - ev.server_timestamp > 60000):
+                                    continue
+                                await self.message_handler(rid, ev)
+                                
+                except Exception as e:
+                    logger.error(f"Sync error: {e}"); await asyncio.sleep(5)
 
-                # 1. Обработка приглашений (Личных сообщений)
-                for invite_id in response.rooms.invite.keys():
-                    await self.handle_invite(invite_id)
+    
 
-                # 2. Обработка сообщений
-                for room_id, room_data in response.rooms.join.items():
-                    for event in room_data.timeline.events:
-                        if isinstance(event, RoomMessageText):
-                            await self.message_handler(room_id, event)
-
-            except Exception as e:
-                logger.error(f"❌ Ошибка в цикле синхронизации: {e}")
-                await asyncio.sleep(5)
 
     async def close(self):
-        await self.client.close()
+            await self.client.close()
 
 async def main():
     bot = MatrixVPNBot()
