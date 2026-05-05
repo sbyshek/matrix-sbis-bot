@@ -136,7 +136,7 @@ restart-alert: ##  Рестарт Alert сервисов
 	$(COMPOSE) restart alert_api alert_bot
 
 logs-alert: ##  Логи Alert сервисов
-	$(COMPOSE) logs -f alert_bot
+	$(COMPOSE) logs -f alert_bot 
 
 logs-api: ##  Логи Alert API
 	$(COMPOSE) logs -f alert_api

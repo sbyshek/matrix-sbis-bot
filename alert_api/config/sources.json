@@ -1,0 +1,30 @@
+[
+  {
+    "source": "scada_critical",
+    "token": "sk_U9gTwAXuRd2vI24BSmocnDRL3iyqtdzFxdwy",
+    "room": "!tech_alerts:matrix.vpk-oil.ru",
+    "active": true,
+    "comment": "Продакшен SCADA, Цех 1"
+  },
+  {
+    "source": "erp_accounting",
+    "token": "sk_VYZVKFARBV1xe0nXPhzwtTd0IDLhDLqFesJP",
+    "room": "!buh_chat:matrix.vpk-oil.ru",
+    "active": true,
+    "comment": "1С Бухгалтерия"
+  },
+  {
+    "source": "erp_index",
+    "token": "sk_koXK0LtOvF5QlcPAfAt2QpHPLiSzrCP3dIan",
+    "room": "!XoCCkvGUxhdBmujayz:matrix.vpk-oil.ru",
+    "active": true,
+    "comment": "1С Производственные показатели"
+  },
+  {
+    "source": "logistic",
+    "token": "sk_dXOTBXidsmSaQTYVqeLpdgyyeKEUWGQrI6wd",
+    "room": "!XoCCkvGUxhdBmujayz:matrix.vpk-oil.ru",
+    "active": true,
+    "comment": "Автотранспорт"
+  }
+]

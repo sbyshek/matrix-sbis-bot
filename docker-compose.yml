@@ -92,6 +92,8 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ADMIN_KEY=${ADMIN_KEY}
     ports:
       - "8765:8000"  # ← Хост:Контейнер
     volumes:
@@ -105,7 +107,10 @@ services:
     container_name: matrix-alert-bot
     env_file: ./alert_bot/.env
     environment:  
-      - TIMEZONE=${TIMEZONE}  
+      - TIMEZONE=${TIMEZONE}
+      - BOT_TOKEN=${BOT_TOKEN}
+      - POLL_INTERVAL=${POLL_INTERVAL:-10}
+      - TIMEZONE=${TIMEZONE:-Asia/Novosibirsk}  # Asia/Novosibirsk  
     volumes:
       - ./alert_bot/app:/app/app
       - ./alert_bot/data:/app/data
