@@ -55,23 +55,78 @@ class AlertBot:
         except Exception:
             return utc_iso[:19].replace("T", " ")
 
+    # def format_message(self, alert: dict) -> tuple[str, str]:
+    #     icons = {"info": "ℹ️", "warning": "⚠️", "critical": "🚨"}
+    #     sev = alert.get("severity", "info")
+    #     icon = icons.get(sev, "ℹ️")
+    #     source = alert.get("source", "Unknown")
+    #     meta = self.sources.get(source, {})
+        
+        
+    #     display_name = meta.get("comment") or source
+    #     severity = alert.get("severity", meta.get("severity", "info"))
+    #     icon = icons.get(severity, "📢")
+
+    #     # ✅ Используем корректную конвертацию вместо среза
+    #     time_str = self._utc_to_local(alert["timestamp"])
+        
+    #     html = f" <b>📣 Источник события: </b> <u>{display_name}</u><br>"
+    #     plain = f"[{sev.upper()}] {display_name}\n"
+
+    #     if alert.get("location"):
+    #         html += f"📍 <b>Место события:</b> {alert['location']}<br>"
+    #         plain += f"📍 Место события: {alert['location']}\n"
+        
+    #     if alert.get("severity"):
+    #         html += f"{icon} <b>Важность:</b> <span class='severity-badge severity-{severity}'>{severity.upper()}</span><br>"
+    #         plain += f"{icon} Важность: {severity.upper()}\n"
+        
+    #     if alert.get("parameter"):
+    #         val, unit = alert.get("value", "N/A"), alert.get("unit", "")
+    #         html += f"📊 <b>{alert['parameter']}:</b> <code>{val} {unit}</code><br>"
+    #         plain += f"📊 {alert['parameter']}: {val} {unit}\n"
+    #         if alert.get("min_val") is not None:
+    #             html += f"&nbsp;&nbsp;&nbsp;📉 Норма: <code>{alert['min_val']} – {alert['max_val']}</code><br>"
+    #             plain += f"    Норма: {alert['min_val']} – {alert['max_val']}\n"
+    #     if alert.get("description"):
+    #         html += f"📝 <b>Комментарий:</b> {alert['description']}<br>"
+    #         plain += f"📝 Комментарий: {alert['description']}\n"
+            
+    #     if alert.get("meta"):
+    #         html += "<br><b>📊 Значения параметров:</b><br>"
+    #         plain += "\n📊 Значения параметров:\n"
+    #         for key, val in alert["meta"].items():
+    #             html += f"&nbsp;&nbsp;&nbsp;• <b>{key}:</b> {val}<br>"
+    #             plain += f"    • {key}: {val}\n"
+        
+    #     html += f"🕒 {time_str}"
+    #     plain += f"🕒 {time_str}"
+    #     return plain, html
+    
     def format_message(self, alert: dict) -> tuple[str, str]:
-        icons = {"info": "ℹ️", "warning": "⚠️", "critical": "🚨"}
-        sev = alert.get("severity", "info")
-        icon = icons.get(sev, "📢")
-        source = alert.get("source", "Unknown")
+        source = alert.get("source", "unknown")
         meta = self.sources.get(source, {})
-        
-        
         display_name = meta.get("comment") or source
         severity = alert.get("severity", meta.get("severity", "info"))
+        
+        icons = {"info": "ℹ️", "warning": "⚠️", "critical": "🚨"}
+        severity_descriptions = {"info": "ИНФОРМАЦИЯ", "warning": "ВНИМАНИЕ", "critical": "КРИТИЧНО"}
         icon = icons.get(severity, "📢")
-
-        # ✅ Используем корректную конвертацию вместо среза
+        severity_description = severity_descriptions.get(severity, "ИНФОРМАЦИЯ")
         time_str = self._utc_to_local(alert["timestamp"])
         
-        html = f" <b>📣 Источник: </b> <u>{display_name}</u><br>"
-        plain = f"[{sev.upper()}] {display_name}\n"
+        html = f"{icon} <b>{severity_description}</b><br>"
+        plain = f"[{severity.upper()}] {severity_description}\n"
+
+        # 📋 ДИНАМИЧЕСКИЙ КОНТЕКСТ (ключ-значение)
+        if alert.get("context"):
+            html += "<b>📋 Контекст:</b><br>"
+            plain += "📋 Контекст:\n"
+            for key, val in alert["context"].items():
+                html += f"&nbsp;&nbsp;&nbsp;• <b>{key}:</b> {val}<br>"
+                plain += f"    • {key}: {val}\n"
+            html += "<br>"  # Отступ после контекста
+            plain += "\n"
 
         if alert.get("location"):
             html += f"📍 <b>Место:</b> {alert['location']}<br>"
@@ -81,11 +136,19 @@ class AlertBot:
             plain += f"📝 Описание: {alert['description']}\n"
         if alert.get("parameter"):
             val, unit = alert.get("value", "N/A"), alert.get("unit", "")
-            html += f"📊 <b>{alert['parameter']}:</b> <code>{val} {unit}</code><br>"
-            plain += f"📊 {alert['parameter']}: {val} {unit}\n"
+            html += f" 🎚 <b>Контролируемый параметр</b> [<code>{alert['parameter']}</code>]: <code>{val} {unit}</code><br>"
+            plain += f"🎚 Контролируемый параметр [{alert['parameter']}]: {val} {unit}\n"
             if alert.get("min_val") is not None:
-                html += f"&nbsp;&nbsp;&nbsp;📉 Норма: <code>{alert['min_val']} – {alert['max_val']}</code><br>"
+                html += f"&nbsp;&nbsp;&nbsp; Норма: <code>{alert['min_val']} – {alert['max_val']}</code><br>"
                 plain += f"    Норма: {alert['min_val']} – {alert['max_val']}\n"
+
+        # 📊 ДИНАМИЧЕСКИЕ ПАРАМЕТРЫ (meta)
+        if alert.get("meta"):
+            html += "<br><b>📊 Параметры процесса:</b><br>"
+            plain += "\n Параметры процесса:\n"
+            for key, val in alert["meta"].items():
+                html += f"&nbsp;&nbsp;&nbsp;• <b>{key}:</b> {val}<br>"
+                plain += f"    • {key}: {val}\n"
 
         html += f"🕒 {time_str}"
         plain += f"🕒 {time_str}"

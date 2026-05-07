@@ -99,6 +99,8 @@ services:
     volumes:
       - ./alert_api/logs:/app/logs
       - ./alert_api/app:/app/app
+      - ./alert_api/config:/app/config
+      - ./alert_api/templates:/app/templates
     networks: [matrix-net]
     depends_on: [redis]
 

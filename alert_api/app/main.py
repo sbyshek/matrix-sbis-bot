@@ -2,12 +2,19 @@ import os
 import json
 import asyncio
 import time
+import re
+import httpx
 import logging
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 import redis
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException, Header, Request, Form
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel
+
+templates = Jinja2Templates(directory="/app/templates")
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -46,6 +53,16 @@ def load_config():
 def save_config():
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(_sources, f, indent=2, ensure_ascii=False)
+        
+        
+def normalize_number(val: str) -> Optional[float]:
+        if not val:
+            return None
+        try:
+            # Заменяем запятую на точку и пробуем распарсить
+            return float(str(val).replace(",", "."))
+        except:
+            return None
 
 load_config()
 
@@ -87,6 +104,8 @@ class Alert(BaseModel):
     min_val: Optional[float] = None
     max_val: Optional[float] = None
     severity: str = "info"
+    meta: Optional[Dict[str, Any]] = None
+    context: Optional[Dict[str, Any]] = None
 
 # === ENDPOINTS ===
 
@@ -108,6 +127,18 @@ async def ingest_alert(
     logger.info(f"✅ [{alert.severity}] {verified_source}")
     return {"status": "ok", "source": verified_source}
 
+
+
+
+
+@app.get("/web/success", response_class=HTMLResponse)
+async def success_page(request: Request):
+    return templates.TemplateResponse(request,
+        name="success.html", 
+        context={
+        "request": request,
+        "message": "Алерт успешно отправлен!"
+    })
 
 @app.get("/api/v1/stream/all")
 async def get_all_stream(
@@ -162,6 +193,22 @@ async def add_source(source: dict, _: str = Depends(verify_admin_key)):
     load_config()
     return {"status": "added", "source": source["source"]}
 
+
+@app.post("/api/v1/admin/reload")
+async def reload_config(_: str = Depends(verify_admin_key)):
+    """Перечитывает sources.json в память без рестарта контейнера"""
+    try:
+        load_config()
+        return {
+            "status": "ok", 
+            "message": "config reloaded", 
+            "routes": len(_route_map), 
+            "tokens": len(_token_map)
+        }
+    except Exception as e:
+        logger.error(f"Config reload failed: {e}")
+        raise HTTPException(500, f"Reload error: {str(e)}")
+
 @app.get("/api/v1/history")
 async def get_history(
     limit: int = 50,
@@ -205,6 +252,171 @@ async def get_history(
         "limit": limit,
         "events": list(reversed(events))  # Возвращаем от новых к старым
     }
+
+
+
+
+
+@app.get("/web/alert-form")  # ← response_class НУЖЕН для HTML
+async def show_alert_form(
+    request: Request,
+    source: str = "Unknown",
+    location: str = "",
+    token: str = "",
+    parameter: str = "",
+    norm: str = "",
+    value: str = "",
+    unit: str = "",
+    comment: str = "",
+    meta: str = "",
+    context: str = "",
+    severity: str = "info"  
+    
+):
+    # Парсинг нормы
+    min_val, max_val = 0.0, 0.0
+    try:
+        # if "-" in norm:
+        #     parts = norm.split("-")
+        #     min_val = float(parts[0].strip())
+        #     max_val = float(parts[1].strip())
+        if norm:
+        # Нормализуем: заменяем запятые на точки (для дробных)
+            norm_clean = norm.replace(",", ".")
+            
+            # Regex ищет паттерн: число (возможно с минусом) + разделитель + число
+            match = re.search(r'([-+]?\d*\.?\d+)\s*[-/]\s*([-+]?\d*\.?\d+)', norm_clean)
+            if match:
+                try:
+                    min_val = float(match.group(1))
+                    max_val = float(match.group(2))
+                    logger.debug(f"✅ Parsed norm '{norm}' → min={min_val}, max={max_val}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to convert norm to float: {e}")
+    except: pass
+
+    # Парсинг meta
+    meta_dict = {}
+    if meta:
+        try:
+            import json
+            meta_dict = json.loads(meta)
+        except Exception as e:
+            logger.warning(f"Failed to parse meta JSON: {e}")
+    
+    # Парсинг context
+    context_dict = {}
+    if context:
+        try:
+            import json
+            context_dict = json.loads(context)
+        except Exception as e:
+            logger.warning(f"Failed to parse context JSON: {e}")
+    
+    # Определение severity
+    severity = "info"
+    try:
+        v = float(value)
+        if v > max_val or v < min_val:
+            severity = "warning"
+    except: pass
+
+
+
+    # Рендеринг шаблона (именованные аргументы!)
+    return templates.TemplateResponse(
+        request,
+        name="alert_form.html",
+        context={
+            "request": request,  # ← Обязательно!
+            "source": source,
+            "token": token,
+            "source_name": source.replace("_", " ").upper(),
+            "location": location or "Производство",
+            "parameter": parameter,
+            "norm_text": norm,
+            "min_val": min_val,
+            "max_val": max_val,
+            "value": value,
+            "unit": unit,
+            "description": comment,
+            "severity": severity,
+            "meta": meta_dict,
+            "context": context_dict
+        }
+    )
+
+
+
+@app.post("/web/submit")
+async def submit_web_alert(
+    request: Request,
+    token: str = Form(...),
+    location: str = Form(None),
+    parameter: str = Form(None),
+    value: str = Form(None),
+    min_val: str = Form(None),
+    max_val: str = Form(None),
+    unit: str = Form(None),
+    description: str = Form(None),
+    severity: str = Form("info"),
+    meta: str = Form(None),
+    context: str = Form(None)
+):
+    # 1️ Валидация токена на уровне формы
+    if token not in _token_map :
+        raise HTTPException(401, "Invalid token")
+    
+    meta_dict = None
+    if meta:
+        try:
+            import json
+            meta_dict = json.loads(meta)
+        except:
+            logger.warning("Failed to parse meta JSON")
+
+    context_dict = None
+    if context and context.strip():  # ← ПРОВЕРКА: не пустая ли строка
+        try:
+            import json
+            context_dict = json.loads(context)
+            logger.info(f"✅ Parsed context: {context_dict}")
+        except Exception as e:
+            logger.error(f"❌ Failed to parse context JSON: {e}")
+            logger.error(f"   Raw context value: '{context}'")  # Покажет, что пришло
+    else:
+        logger.warning("⚠️ Context field is empty or None")
+
+    # 2️ Формируем чистый JSON-пакет (как ожидают внешние системы)
+    payload = {
+        "location": location,
+        "parameter": parameter,
+        "value": normalize_number(value) if value else None,
+        "unit": unit if unit else None,
+        "min_val": normalize_number(min_val) if min_val else None,
+        "max_val": normalize_number(max_val) if max_val else None,
+        "description": description,
+        "severity": severity,
+        "meta": meta_dict,
+        "context": context_dict
+    }
+
+    # 3️ Проксируем на внутренний API с правильным заголовком
+    internal_url = "http://127.0.0.1:8000/api/v1/ingest"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(internal_url, json=payload, headers=headers, timeout=5.0)
+
+    # 4️⃣ Редирект на страницу успеха или ошибка
+    if resp.status_code == 201:
+        return RedirectResponse(url="/web/success", status_code=303)
+    else:
+        logger.error(f"API proxy failed: {resp.status_code} {resp.text}")
+        raise HTTPException(500, f"Failed to send alert to API: {resp.status_code}")
 
 @app.get("/health")
 def health(): return {"status": "ok", "redis": redis_client.ping()}

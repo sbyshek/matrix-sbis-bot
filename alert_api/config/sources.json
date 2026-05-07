@@ -26,5 +26,19 @@
     "room": "!XoCCkvGUxhdBmujayz:matrix.vpk-oil.ru",
     "active": true,
     "comment": "Автотранспорт"
+  },
+  {
+    "source": "IT",
+    "token": "sk_KEcx8iu9lYlstSh4AIo83A6yQi1mAVgHmT3L",
+    "room": "!eKbuPLKwTUsObgZFOu:matrix.vpk-oil.ru",
+    "active": true,
+    "comment": "ИТ служба"
+  },
+  {
+    "source": "AVT-800",
+    "token": "sk_rQc0EgiWcKn096slPSJaLIhfRSza0uHnYNw7",
+    "room": "!YShNeyICehtiKGgCDI:matrix.vpk-oil.ru",
+    "active": true,
+    "comment": "ЭЛОУ АВТ-800"
   }
 ]

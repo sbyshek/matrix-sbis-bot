@@ -1,3 +1,6 @@
 fastapi[standard]
 redis
 pydantic
+jinja2
+python-multipart
+httpx
