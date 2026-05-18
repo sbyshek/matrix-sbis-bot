@@ -115,7 +115,7 @@ class AlertBot:
         severity_description = severity_descriptions.get(severity, "ИНФОРМАЦИЯ")
         time_str = self._utc_to_local(alert["timestamp"])
         
-        html = f"{icon} <b>{severity_description}</b><br>"
+        html = f"<hr>{icon} <b>{severity_description}</b><br>"
         plain = f"[{severity.upper()}] {severity_description}\n"
 
         # 📋 ДИНАМИЧЕСКИЙ КОНТЕКСТ (ключ-значение)
@@ -136,7 +136,7 @@ class AlertBot:
             plain += f"📝 Описание: {alert['description']}\n"
         if alert.get("parameter"):
             val, unit = alert.get("value", "N/A"), alert.get("unit", "")
-            html += f" 🎚 <b>Контролируемый параметр</b> [<code>{alert['parameter']}</code>]: <code>{val} {unit}</code><br>"
+            html += f" 🎚 <b>Контролируемый параметр</b><br> [<code>{alert['parameter']}</code>]: <code>{val} {unit}</code><br>"
             plain += f"🎚 Контролируемый параметр [{alert['parameter']}]: {val} {unit}\n"
             if alert.get("min_val") is not None:
                 html += f"&nbsp;&nbsp;&nbsp; Норма: <code>{alert['min_val']} – {alert['max_val']}</code><br>"

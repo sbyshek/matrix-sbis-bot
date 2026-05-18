@@ -1,4 +1,4 @@
-matrix-nio
+matrix-nio[sqlite]
 python-dotenv
 aiohttp
 redis

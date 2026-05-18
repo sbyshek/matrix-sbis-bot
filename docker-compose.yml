@@ -51,6 +51,7 @@ services:
       - ./auto_bot/data:/app/data
       - ./auto_bot/app:/app/app     # Live-reload
       - ./auto_bot/logs:/app/logs   # Логи
+      - ./auto_bot/matrix_store:/app/matrix_store
     restart: unless-stopped
     logging:
       driver: json-file

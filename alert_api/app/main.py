@@ -31,6 +31,8 @@ redis_client = redis.Redis(
 CONFIG_FILE = "/app/config/sources.json"
 LOG_DIR = "/app/logs"
 MAX_LOG_AGE_DAYS = 30
+DRIVERS_FILE = "/app/config/drivers.json"
+
 os.makedirs(LOG_DIR, exist_ok=True)
 
 # Кэши в памяти
@@ -63,6 +65,22 @@ def normalize_number(val: str) -> Optional[float]:
             return float(str(val).replace(",", "."))
         except:
             return None
+
+def get_drivers_map() -> dict:
+    try:
+        with open(DRIVERS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except: return {}
+
+
+class DriverAlertInput(BaseModel):
+    user_id: str
+    vehicle_id: str
+    alert_type: str
+    label: str
+    comment: str = ""
+
+
 
 load_config()
 
@@ -253,10 +271,6 @@ async def get_history(
         "events": list(reversed(events))  # Возвращаем от новых к старым
     }
 
-
-
-
-
 @app.get("/web/alert-form")  # ← response_class НУЖЕН для HTML
 async def show_alert_form(
     request: Request,
@@ -417,6 +431,77 @@ async def submit_web_alert(
     else:
         logger.error(f"API proxy failed: {resp.status_code} {resp.text}")
         raise HTTPException(500, f"Failed to send alert to API: {resp.status_code}")
+
+
+# === 🚛 DRIVER WIDGET ENDPOINTS ===
+
+
+class DriverAlertInput(BaseModel):
+    user_id: str
+    vehicle_id: str
+    alert_type: str
+    label: str
+    comment: str = ""
+    vehicle_number: Optional[str] = None
+    address: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+
+@app.get("/driver/check_access")
+async def check_driver_access(user_id: str, vehicle_id: str):
+    """Проверяет, есть ли юзер в списке водителей для этого автобуса"""
+    drivers = get_drivers_map()
+    allowed = drivers.get(vehicle_id, [])
+    return {"allowed": user_id in allowed, "vehicle_id": vehicle_id}
+
+@app.post("/driver/alert")
+async def receive_driver_alert(
+    alert: DriverAlertInput,
+    verified_source: str = Depends(verify_client_token)
+):
+    # 1. 🔒 Проверка прав
+    if alert.user_id not in get_drivers_map().get(alert.vehicle_id, []):
+        raise HTTPException(403, "Driver not authorized")
+
+    # 2. 📦 Формируем пакет СТРОГО по ТЗ
+    severity_map = {"ok": "info", "late": "warning", "breakdown": "warning", "accident": "critical"}
+    display_id = alert.vehicle_number or alert.vehicle_id
+    location = alert.address or f"ТС {display_id}"
+
+    payload = {
+        "location": location,                  # 📍 Адрес или fallback
+        "description": f"{alert.label}. {alert.comment}".strip(),
+        "parameter": None,                     # 🎚 Пустой обязательно
+        "value": None,
+        "unit": None,
+        "min_val": None,
+        "max_val": None,
+        "severity": severity_map.get(alert.alert_type, "info"),
+        "meta": {
+            "Водитель": alert.user_id,
+            "Способ отправки": "Виджет водителя"
+        },
+        "context": {
+            # "vehicle_id": alert.vehicle_id,
+            
+            # "coordinates": {"lat": alert.lat, "lon": alert.lon} if alert.lat else None,
+            # "matrix_room": f"#bus_{alert.vehicle_id}:matrix.vpk-oil.ru"
+            "ГосНомер": display_id      # 🚌 Номер автобуса
+        }
+    }
+
+    # 3. 💾 Кладём в очередь
+    payload["source"] = verified_source
+    payload["timestamp"] = datetime.now().isoformat()
+    
+    redis_client.lpush("bus:all", json.dumps(payload, ensure_ascii=False))
+    redis_client.ltrim("bus:all", 0, 1999)
+    
+    with open(os.path.join(LOG_DIR, "alerts_active.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        
+    logger.info(f"🚛 Driver alert queued: {verified_source} | {location}")
+    return {"status": "queued", "source": verified_source}
 
 @app.get("/health")
 def health(): return {"status": "ok", "redis": redis_client.ping()}

@@ -42,7 +42,7 @@ async def main():
         # Прямой запрос для отладки
         
         url = f"{config.GLONASS_URL.rstrip('/')}/vehicles/getlastdata"
-        payload = {"vehicleIds": test_ids}  # ✅ Правильный формат
+        payload = {"vehiclesIds": test_ids}  # ✅ Правильный формат
         headers = client.headers.copy()
         
         async with aiohttp.ClientSession() as session:

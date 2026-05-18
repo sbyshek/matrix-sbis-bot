@@ -16,7 +16,7 @@
   {
     "source": "erp_index",
     "token": "sk_koXK0LtOvF5QlcPAfAt2QpHPLiSzrCP3dIan",
-    "room": "!XoCCkvGUxhdBmujayz:matrix.vpk-oil.ru",
+    "room": "!YShNeyICehtiKGgCDI:matrix.vpk-oil.ru",
     "active": true,
     "comment": "1С Производственные показатели"
   },
@@ -25,7 +25,7 @@
     "token": "sk_dXOTBXidsmSaQTYVqeLpdgyyeKEUWGQrI6wd",
     "room": "!XoCCkvGUxhdBmujayz:matrix.vpk-oil.ru",
     "active": true,
-    "comment": "Автотранспорт"
+    "comment": "Логистика"
   },
   {
     "source": "IT",
@@ -40,5 +40,12 @@
     "room": "!YShNeyICehtiKGgCDI:matrix.vpk-oil.ru",
     "active": true,
     "comment": "ЭЛОУ АВТ-800"
+  },
+  {
+    "source": "driver_413424",
+    "token": "sk_ZcxiO7qj1UoZS7roMwqNswShPKQEUCKAsxXS",
+    "room": "!tMKDrgGQUqUBULgdzJ:matrix.vpk-oil.ru",
+    "active": true,
+    "comment": "Автобус Родники ЮТОНГ М944УО 154"
   }
 ]
