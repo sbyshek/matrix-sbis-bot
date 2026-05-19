@@ -125,6 +125,7 @@ logs-reg: ##  Логи Registry Bot
 shell-reg: ## 🐚 Bash в Registry Bot
 	$(COMPOSE) exec registry-bot bash
 
+# ================= ALERT API =================
 
 up-alert: ## 🚀 Запустить Alert API + Bot
 	$(COMPOSE) up -d alert_api alert_bot
@@ -140,3 +141,20 @@ logs-alert: ##  Логи Alert сервисов
 
 logs-api: ##  Логи Alert API
 	$(COMPOSE) logs -f alert_api
+
+# ================= CANTEEN API =================
+
+up-canteen: ## 🚀 Запустить Alert API + Bot
+	$(COMPOSE) up -d canteen_api 
+
+down-canteen: ##  Остановить Alert сервисы
+	$(COMPOSE) stop canteen_api
+
+restart-canteen: ##  Рестарт Alert сервисов
+	$(COMPOSE) restart canteen_api
+
+logs-canteen: ##  Логи Alert сервисов
+	$(COMPOSE) logs -f canteen_api
+
+logs-canteen: ##  Логи Alert API
+	$(COMPOSE) logs -f canteen_api

@@ -1,0 +1,4 @@
+{
+  "@cook2:matrix.vpk-oil.ru": ["kitchen"],
+  "@a.hohlov:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"]
+}

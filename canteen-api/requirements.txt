@@ -1,0 +1,7 @@
+# requirements.txt
+fastapi
+uvicorn
+redis
+python-multipart
+python-docx
+pydantic

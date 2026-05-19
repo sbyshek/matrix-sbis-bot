@@ -129,6 +129,23 @@ services:
     networks: [matrix-net]
     depends_on: [alert_api, redis]
 
+  canteen_api:
+    build: ./canteen-api
+    restart: unless-stopped
+    env_file:
+      - ./canteen-api/.env 
+    environment:
+      - REDIS_URL=redis://redis:6379/0  # Подключи к существующему Redis
+    volumes:
+      - ./canteen-api/config:/app/config
+      - ./canteen-api:/app:ro
+    ports:
+      - "8766:8000"
+    depends_on: 
+      - redis
+    networks:
+      - matrix-net  # Та же сеть, что у nginx/fastapi
+
 networks:
   matrix-net:
     driver: bridge
