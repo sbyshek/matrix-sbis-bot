@@ -117,6 +117,7 @@ class Alert(BaseModel):
     location: Optional[str] = None
     description: Optional[str] = None
     parameter: Optional[str] = None
+    product: Optional[str] = None
     value: Optional[float] = None
     unit: Optional[str] = None
     min_val: Optional[float] = None

@@ -1,4 +1,18 @@
 {
-  "@cook2:matrix.vpk-oil.ru": ["kitchen"],
-  "@a.hohlov:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"]
+  "@a.hohlov:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"],
+  "@i.kalenova:matrix.vpk-oil.ru": ["admin", "kitchen"],
+  "@y.kuzmichev:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"],
+  "@r.perfilev:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"],
+  "@a.rodionov:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"],
+  "@m.evdokimov:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"],
+  "@e.belenetskiy:matrix.vpk-oil.ru": ["vip"],
+  "@s.polezaev:matrix.vpk-oil.ru": ["vip"],
+  "@e.gukova:matrix.vpk-oil.ru": ["vip"],
+  "@t.fatianova:matrix.vpk-oil.ru": ["vip"],
+  "@l.ryjenkova:matrix.vpk-oil.ru": ["vip"],
+  "@s.taylakov:matrix.vpk-oil.ru": ["vip"],
+  "@a.skachkov:matrix.vpk-oil.ru": ["vip"],
+  "@v.redkin:matrix.vpk-oil.ru": ["vip"],
+  "@m.shapovalov:matrix.vpk-oil.ru": ["vip"],
+  "@v.stoporev:matrix.vpk-oil.ru": ["vip"]
 }

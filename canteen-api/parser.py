@@ -2,6 +2,37 @@
 import re, uuid
 from docx import Document
 from models import Dish, Category, MealTime, FullMenu
+from datetime import datetime
+from typing import Optional
+
+
+MONTHS_RU = {
+    'января': 1, 'февраля': 2, 'марта': 3, 'апреля': 4, 'мая': 5, 'июня': 6,
+    'июля': 7, 'августа': 8, 'сентября': 9, 'октября': 10, 'ноября': 11, 'декабря': 12
+}
+
+
+def extract_menu_date(doc) -> Optional[str]:
+    """Ищет дату в формате 'Меню на 05 февраля 2026 года'"""
+    text_parts = [p.text for p in doc.paragraphs]
+    for table in doc.tables:
+        for row in table.rows:
+            text_parts.extend([cell.text for cell in row.cells])
+    
+    full_text = " ".join(text_parts)
+    pattern = r"Меню\s+на\s+(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(\d{4})"
+    match = re.search(pattern, full_text, re.IGNORECASE)
+    
+    if match:
+        day, month_str, year = match.groups()
+        month = MONTHS_RU.get(month_str.lower())
+        if month:
+            try:
+                dt = datetime(int(year), month, int(day))
+                return dt.isoformat()  # Вернёт "2026-02-05T00:00:00"
+            except ValueError:
+                pass
+    return None
 
 def parse_price(price_str: str) -> float:
     """Парсит цены вида '38-00', '10 -00', '120,50' в float"""
@@ -23,6 +54,10 @@ def parse_price(price_str: str) -> float:
 def parse_docx(file_path: str) -> FullMenu:
     doc = Document(file_path)
     menu = FullMenu()
+    
+    
+    # 📅 Извлекаем дату актуальности
+    menu.valid_date = extract_menu_date(doc)
     
     # 🔥 КЛЮЧЕВОЕ: первая таблица = завтрак, вторая = обед
     table_index = 0

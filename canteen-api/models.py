@@ -56,6 +56,7 @@ class Menu(BaseModel):
 class FullMenu(BaseModel):
     breakfast: Menu = Field(default_factory=lambda: Menu(time=MealTime.breakfast))
     lunch: Menu = Field(default_factory=lambda: Menu(time=MealTime.lunch))
+    valid_date: Optional[str] = None
 
 class CartItem(BaseModel):
     dish: Dish
