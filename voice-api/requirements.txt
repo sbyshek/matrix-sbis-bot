@@ -1,0 +1,25 @@
+# Web
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+gunicorn==22.0.0
+python-multipart==0.0.9
+
+# Config & Validation
+pydantic==2.9.0
+pydantic-settings==2.5.0
+python-dotenv==1.0.1
+
+# Async & Queue
+redis==5.0.8
+arq==0.25.0          # Redis-based async tasks
+
+# STT
+faster-whisper==1.0.3
+soundfile==0.12.1    # Для предобработки аудио
+
+# Matrix & HTTP
+httpx==0.27.0
+aiofiles==24.1.0
+
+# Utils
+python-jose[cryptography]==3.3.0

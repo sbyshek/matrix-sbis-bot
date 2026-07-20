@@ -13,6 +13,11 @@ services:
         compress: "true"     # Сжимать старые файлы (gzip)
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}  # ⚠️ Поменяй в .env или здесь
+    profiles:
+      - all
+      - dev
+      - prod 
+      - bot
     volumes:
       - redis_data:/data
     networks:
@@ -33,6 +38,11 @@ services:
       - ./sbis_bot/data:/app/data    # Состояние
       - ./sbis_bot/logs:/app/logs    # Логи
     restart: unless-stopped
+    profiles:
+      - all
+      - dev
+      - prod 
+      - bot
     logging:
       driver: json-file
       options:
@@ -53,6 +63,8 @@ services:
       - ./auto_bot/logs:/app/logs   # Логи
       - ./auto_bot/matrix_store:/app/matrix_store
     restart: unless-stopped
+    profiles:
+      - auto
     logging:
       driver: json-file
       options:
@@ -71,6 +83,11 @@ services:
       - ./registry_bot/app:/app/app
       - ./registry_bot/logs:/app/logs
     restart: unless-stopped
+    profiles:
+      - all
+      - dev
+      - prod 
+      - bot
     logging:
       driver: json-file
       options:
@@ -90,6 +107,11 @@ services:
         max-file: "5"        # Хранить последние 5 файлов (~100 МБ)
         compress: "true"     # Сжимать старые файлы (gzip)
     env_file: .env
+    profiles:
+      - all
+      - dev
+      - prod 
+      - bot
     environment:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD}
@@ -120,6 +142,11 @@ services:
       - ./alert_bot/logs:/app/logs
       - ./alert_bot/config:/app/config
     restart: unless-stopped
+    profiles:
+      - all
+      - dev
+      - prod 
+      - bot
     logging:
       driver: json-file
       options:
@@ -136,6 +163,11 @@ services:
       - ./canteen-api/.env 
     environment:
       - REDIS_URL=redis://redis:6379/0  # Подключи к существующему Redis
+    profiles:
+      - all
+      - dev
+      - prod 
+      - bot
     volumes:
       - ./canteen-api/config:/app/config
       - ./canteen-api:/app:ro
@@ -145,6 +177,63 @@ services:
       - redis
     networks:
       - matrix-net  # Та же сеть, что у nginx/fastapi
+
+
+  task-api:
+    build: ./task-manager/api          # Путь к папке с Dockerfile
+    container_name: task_api
+    restart: unless-stopped
+    env_file: ./task-manager/.env      # Используем отдельный .env для этого модуля
+    profiles:
+      - all
+      - dev
+      - prod 
+      - bot
+    ports:
+      - "8768:8000"                    # Проброс порта на хост
+    volumes:
+      - ./task-manager/data:/app/data  # Сохраняем SQLite базу на диске хоста
+      - ./task-manager/api/app:/app/app    # Монтируем код для Hot-Reload (разработка)
+    networks:
+      - matrix-net                     # Подключаем к общей сети
+    depends_on:
+      - redis       
+      
+  voice-api:
+    build: ./voice-api
+    container_name: voice-api
+    restart: unless-stopped
+    env_file: ./voice-api/.env
+    profiles:
+      - all
+      - dev
+      - prod
+      - voice  # ← Новый профиль для изолированного запуска
+    ports:
+      - "8769:8000"  # Эндпоинт для Asterisk curl
+    volumes:
+      - ./voice-api/app:/app/app:ro      # Код (read-only для безопасности)
+      - ./voice-api/data:/app/data       # Временные WAV файлы
+      - ./voice-api/logs:/app/logs       # Логи приложения
+    environment:
+      - REDIS_URL=redis://redis:6379/3   # Явно указываем DB
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - matrix-net
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+        compress: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s                   # Ждем запуска Redis (убедись, что сервис называется redis)
 
 networks:
   matrix-net:

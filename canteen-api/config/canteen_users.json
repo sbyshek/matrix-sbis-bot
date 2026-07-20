@@ -1,6 +1,6 @@
 {
   "@a.hohlov:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"],
-  "@i.kalenova:matrix.vpk-oil.ru": ["admin", "kitchen"],
+  "@i.kalenova:matrix.vpk-oil.ru": ["admin","vip", "kitchen"],
   "@y.kuzmichev:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"],
   "@r.perfilev:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"],
   "@a.rodionov:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"],
@@ -14,5 +14,7 @@
   "@a.skachkov:matrix.vpk-oil.ru": ["vip"],
   "@v.redkin:matrix.vpk-oil.ru": ["vip"],
   "@m.shapovalov:matrix.vpk-oil.ru": ["vip"],
-  "@v.stoporev:matrix.vpk-oil.ru": ["vip"]
+  "@v.stoporev:matrix.vpk-oil.ru": ["vip"],
+  "@o.smirnova:matrix.vpk-oil.ru": ["vip"],
+  "@a.stebaylov:matrix.vpk-oil.ru": ["vip"]
 }

@@ -7,6 +7,14 @@
 COMPOSE := docker compose
 COMPOSE_FILE := docker-compose.yml
 
+TASK := task-api
+SBIS := sbis-bot
+AUTO := auto-bot
+REGISTRY := registry-bot
+ALERT := alert_bot
+CANTEEN := canteen_api
+VOICE := voice-api
+
 # Цвета для вывода
 COLOR_RESET := \033[0m
 COLOR_GREEN := \033[32m
@@ -20,22 +28,22 @@ help: ## 📖 Показать справку по всем командам
 
 build: ## 🏗️ Собрать все образы
 	@echo "$(COLOR_YELLOW)🔨 Собираю все сервисы...$(COLOR_RESET)"
-	$(COMPOSE) build
+	$(COMPOSE) --profile all build
 
 up: ## 🚀 Запустить все сервисы в фоне
-	$(COMPOSE) up -d
+	$(COMPOSE) --profile all up -d
 
 down: ## 🛑 Остановить все контейнеры
-	$(COMPOSE) down
+	$(COMPOSE) --profile all down
 
 restart: ## 🔄 Мягкий рестарт всех контейнеров (без пересборки)
-	$(COMPOSE) restart
+	$(COMPOSE) --profile all restart
 
 up-f: ## 🚀 Запустить всё в foreground с логами
-	$(COMPOSE) up
+	$(COMPOSE) --profile all up
 
 logs: ## 📜 Логи всех сервисов (follow)
-	$(COMPOSE) logs -f
+	$(COMPOSE) --profile all logs -f
 
 status: ## 📊 Статус контейнеров
 	$(COMPOSE) ps
@@ -156,5 +164,44 @@ restart-canteen: ##  Рестарт Alert сервисов
 logs-canteen: ##  Логи Alert сервисов
 	$(COMPOSE) logs -f canteen_api
 
-logs-canteen: ##  Логи Alert API
-	$(COMPOSE) logs -f canteen_api
+
+# ================= TASK API =================
+
+build-task: ## 🚀 Собрать TASK API
+	$(COMPOSE) build ${TASK}
+
+up-task: ## 🚀 Запустить TASK API
+	$(COMPOSE) up -d ${TASK}
+
+down-task: ##  Остановить TASK сервисы
+	$(COMPOSE) stop ${TASK}
+
+restart-task: ##  Рестарт TASK сервисов
+	$(COMPOSE) restart ${TASK}
+
+logs-task: ##  Логи TASK сервисов
+	$(COMPOSE) logs -f ${TASK}
+
+shell-task: ## 🐚 Bash в Registry Bot
+	$(COMPOSE) exec ${TASK} bash
+
+
+# ================= VOICE API =================
+
+build-voice: ## 🚀 Собрать VOICE API
+	$(COMPOSE) build ${VOICE}
+
+up-voice: ## 🚀 Запустить VOICE API
+	$(COMPOSE) up -d ${VOICE}
+
+down-voice: ##  Остановить VOICE сервисы
+	$(COMPOSE) stop ${VOICE}
+
+restart-voice: ##  Рестарт VOICE сервисов
+	$(COMPOSE) restart ${VOICE}
+
+logs-voice: ##  Логи TASK сервисов
+	$(COMPOSE) logs -f ${VOICE}
+
+shell-voice: ## 🐚 Bash в VOICE
+	$(COMPOSE) exec ${VOICE} bash
