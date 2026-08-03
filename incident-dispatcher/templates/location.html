@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>{{ loc_name }} - Статус</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    padding: 20px; 
+    transition: background 0.8s ease;
+  }
+  
+  /* Режимы фона */
+  body.mode-locked { background: #1a1d24; color: #8a95a5; }
+  body.mode-normal { background: linear-gradient(135deg, #1a472a 0%, #2d5a3d 100%); color: #d8f3dc; }
+  body.mode-attention { 
+    background: linear-gradient(135deg, #4a3510 0%, #5c4214 100%); 
+    color: #ffe8cc; 
+    animation: pulse-attention 2s infinite;
+  }
+  body.mode-alarm { 
+    background: linear-gradient(135deg, #5c1818 0%, #7a1f1f 100%); 
+    color: #ffd8d8; 
+    animation: pulse-alarm 1s infinite;
+  }
+  
+  @keyframes pulse-attention { 
+    0% { box-shadow: inset 0 0 0 0 rgba(240, 140, 0, 0.4); } 
+    50% { box-shadow: inset 0 0 50px 10px rgba(240, 140, 0, 0.2); } 
+    100% { box-shadow: inset 0 0 0 0 rgba(240, 140, 0, 0); } 
+  }
+  @keyframes pulse-alarm { 
+    0% { box-shadow: inset 0 0 0 0 rgba(224, 49, 49, 0.7); } 
+    50% { box-shadow: inset 0 0 80px 20px rgba(224, 49, 49, 0.3); } 
+    100% { box-shadow: inset 0 0 0 0 rgba(224, 49, 49, 0); } 
+  }
+  
+  .card { 
+    text-align: center; 
+    width: 100%; 
+    max-width: 600px; 
+    padding: 40px 30px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 24px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  
+  .icon { font-size: 96px; margin-bottom: 20px; }
+  .name { font-size: 36px; font-weight: 800; margin-bottom: 12px; }
+  .status { 
+    font-size: 28px; 
+    font-weight: 700; 
+    margin-bottom: 30px; 
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 12px 24px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 12px;
+    display: inline-block;
+  }
+  
+  .events-list { margin: 30px 0; text-align: left; max-height: 300px; overflow-y: auto; }
+  .event-item {
+    background: rgba(0,0,0,0.3); 
+    border-radius: 12px; 
+    padding: 16px; 
+    margin-bottom: 12px;
+    border-left: 5px solid;
+  }
+  .event-item.attention { border-left-color: #f08c00; }
+  .event-item.alarm { border-left-color: #e03131; }
+  .event-header { 
+    display: flex; 
+    justify-content: space-between; 
+    margin-bottom: 8px; 
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .event-comment { opacity: 0.95; font-size: 15px; line-height: 1.4; }
+  .event-time { font-size: 12px; opacity: 0.7; margin-top: 6px; }
+  .event-author { font-size: 12px; color: #69db7c; margin-top: 4px; font-family: monospace; }
+
+  .controls { margin-top: 30px; display: flex; gap: 12px; flex-direction: column; }
+  .btn { 
+    padding: 16px; 
+    border: none; 
+    border-radius: 12px; 
+    font-size: 16px; 
+    font-weight: 700; 
+    cursor: pointer; 
+    color: white; 
+    transition: 0.1s; 
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-a { background: #f08c00; }
+  .btn-al { background: #e03131; }
+  .btn-clear { background: #495057; }
+  .btn-history { background: #339af0; }
+  .btn-login { background: #339af0; width: 100%; }
+  .btn-logout { background: rgba(255,255,255,0.1); font-size: 14px; padding: 10px; margin-top: 10px; }
+
+  /* Модальное окно */
+  .modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85); z-index: 9999;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-content {
+    background: #1a1d24; padding: 30px; border-radius: 16px;
+    max-width: 400px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  }
+  .modal-content h2 { color: #e1e7ef; margin-top: 0; }
+  .modal-content p { color: #8a95a5; margin-bottom: 20px; font-size: 14px; }
+  .modal-content textarea {
+    width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #2c3440;
+    background: #15191e; color: #fff; font-family: monospace; font-size: 12px;
+    min-height: 80px; resize: vertical;
+  }
+  .modal-buttons { margin-top: 20px; display: flex; gap: 10px; }
+  .modal-buttons button { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  
+  /* История */
+  .history-item {
+    background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px;
+    margin-bottom: 8px; border-left: 4px solid #495057;
+  }
+  
+    /* Стили для модального окна комментария */
+    .comment-modal {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.85); z-index: 9999;
+      display: none; align-items: center; justify-content: center; padding: 20px;
+    }
+    .comment-modal-content {
+      background: #1a1d24; padding: 24px; border-radius: 16px;
+      max-width: 400px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      border: 1px solid #2c3440;
+    }
+    .comment-modal h3 { color: #e1e7ef; margin-top: 0; margin-bottom: 16px; font-size: 18px; }
+    .comment-input {
+      width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #2c3440;
+      background: #15191e; color: #fff; font-size: 14px; min-height: 80px;
+      resize: vertical; margin-bottom: 16px; box-sizing: border-box;
+    }
+    .comment-input:focus { outline: none; border-color: #339af0; }
+    .comment-buttons { display: flex; gap: 10px; }
+    .comment-buttons button { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .comment-buttons .btn-submit { background: #339af0; color: white; }
+    .comment-buttons .btn-cancel { background: #495057; color: white; }
+
+  @media (max-width: 600px) {
+    .icon { font-size: 72px; }
+    .name { font-size: 28px; }
+    .status { font-size: 22px; }
+  }
+</style>
+</head>
+<body class="mode-locked">
+<div class="card">
+  <!-- Экран блокировки -->
+  <div id="lockedContent">
+    <div class="icon" style="opacity: 0.3;">🔒</div>
+    <h2>Доступ ограничен</h2>
+    <p style="margin: 20px 0; line-height: 1.5;">
+      Для просмотра статуса необходимо быть участником комнаты Matrix.
+    </p>
+    <button class="btn btn-login" onclick="showAuthModal()"> Войти через Matrix Token</button>
+  </div>
+
+  <!-- Основной контент (скрыт до авторизации) -->
+  <div id="mainContent" style="display: none;">
+    <div class="icon">{{ loc_icon }}</div>
+    <div class="name">{{ loc_name }}</div>
+    <div id="statusText" class="status">ЗАГРУЗКА...</div>
+    
+    <div id="eventsList" class="events-list"></div>
+
+    <!-- Кнопки управления (только для модераторов) -->
+    <div id="adminControls" class="controls" style="display: none;">
+      <button class="btn btn-a" onclick="requestAction('attention')">⚠️ ОБЪЯВИТЬ ВНИМАНИЕ</button>
+      <button class="btn btn-al" onclick="requestAction('alarm')">🚨 ОБЪЯВИТЬ ТРЕВОГУ</button>
+      <button class="btn btn-clear" onclick="clearAll()">🔕 ОТБОЙ (Закрыть всё)</button>
+    </div>
+    
+    <!-- Общие кнопки (для всех участников) -->
+    <div class="controls">
+      <button class="btn btn-history" onclick="showHistory()">📜 История событий</button>
+      <button class="btn btn-logout" onclick="logout()">🚪 Сбросить авторизацию</button>
+    </div>
+    
+    <div id="userInfo" style="margin-top: 20px; font-size: 12px; opacity: 0.6;"></div>
+  </div>
+</div>
+
+<script>
+const API_BASE = window.location.pathname.startsWith('/incident-widget/') ? '/incident-widget/api' : '/api';
+const LOC_ID = "{{ loc_id }}";
+const ROOM_ID = "{{ room_id }}";
+const TOKEN_KEY = `matrix_widget_token_${LOC_ID}`;
+
+const urlParams = new URLSearchParams(window.location.search);
+
+// 🔥 СЕКРЕТНЫЙ ПАРАМЕТР ДЛЯ СБРОСА
+if (urlParams.get('reset') === 'true') {
+    localStorage.removeItem(TOKEN_KEY);
+    alert("✅ Память виджета очищена! Перезагрузите страницу.");
+    // Убираем параметр reset из URL, чтобы не сбрасывать каждый раз
+    window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace('&reset=true', '').replace('?reset=true', ''));
+}
+
+
+
+let userToken = localStorage.getItem(TOKEN_KEY);
+let isModerator = false;
+
+// Читаем параметры Matrix (для отображения, не для безопасности)
+// const urlParams = new URLSearchParams(window.location.search); 
+const MATRIX_USER_ID = urlParams.get('matrix_user_id') || 'Неизвестный пользователь';
+
+let pendingActionType = null; // Запоминаем тип действия (alarm/attention)
+
+function openCommentModal(type) {
+  pendingActionType = type;
+  const title = type === 'alarm' ? '🚨 ОБЪЯВИТЬ ТРЕВОГУ' : '⚠️ ОБЪЯВИТЬ ВНИМАНИЕ';
+  document.getElementById('commentModalTitle').textContent = title;
+  document.getElementById('commentInput').value = '';
+  document.getElementById('commentModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('commentInput').focus(), 100);
+}
+
+function closeCommentModal() {
+  document.getElementById('commentModal').style.display = 'none';
+  pendingActionType = null;
+}
+
+// Закрытие по клику на фон
+document.getElementById('commentModal').addEventListener('click', function(e) {
+  if (e.target === this) closeCommentModal();
+});
+
+
+function showAuthModal() {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-content">
+      <h2>🔐 Авторизация</h2>
+      <p>Введите ваш Matrix Access Token.<br>Это нужно сделать только один раз на этом устройстве.</p>
+      <textarea id="tokenInput" placeholder="Вставьте токен из Element (Настройки → Помощь и информация)"></textarea>
+      <div class="modal-buttons">
+        <button id="saveToken" style="background: #339af0; color: white;">Сохранить</button>
+        <button id="cancelToken" style="background: #495057; color: white;">Отмена</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  
+  document.getElementById('saveToken').onclick = () => {
+    const token = document.getElementById('tokenInput').value.trim();
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+      userToken = token;
+      modal.remove();
+      fetchState();
+    }
+  };
+  document.getElementById('cancelToken').onclick = () => modal.remove();
+}
+
+function showDashboard() {
+  document.getElementById('lockedContent').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'block';
+  document.getElementById('userInfo').textContent = `Вы: ${MATRIX_USER_ID}`;
+}
+
+function showLocked() {
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('lockedContent').style.display = 'block';
+  document.body.className = 'mode-locked';
+}
+
+
+async function fetchState() {
+  if (!userToken) {
+    showLocked();
+    return;
+  }
+
+  try {
+    // 🔥 ВАЖНО: запрашиваем статус только своей локации, а не весь дашборд
+    const res = await fetch(`${API_BASE}/location/${LOC_ID}/status`, {
+      headers: { 'Authorization': `Bearer ${userToken}` } // 🔥 Токен обязателен
+    });
+    
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem(TOKEN_KEY);
+      userToken = null;
+      isModerator = false;
+      showLocked();
+      return;
+    }
+    
+    if (!res.ok) {
+      console.error("Ошибка получения статуса:", res.status);
+      return;
+    }
+    
+    const data = await res.json();
+    showDashboard();
+    
+    // Обновляем фон и статус
+    document.body.className = `mode-${data.mode}`;
+    const statusMap = { normal: 'НОРМА', attention: 'ВНИМАНИЕ', alarm: 'ТРЕВОГА' };
+    document.getElementById('statusText').textContent = statusMap[data.mode] || 'НЕИЗВЕСТНО';
+    
+    // Сохраняем флаг модератора
+    isModerator = data.is_moderator || false;
+    
+    // Показываем/скрываем кнопки админа
+    document.getElementById('adminControls').style.display = isModerator ? 'flex' : 'none';
+    
+    // Рендерим события
+    const list = document.getElementById('eventsList');
+    if (data.events.length === 0) {
+      list.innerHTML = '<p style="text-align: center; opacity: 0.6; padding: 20px;">Нет активных событий</p>';
+    } else {
+      list.innerHTML = '<h3 style="margin-bottom: 16px; opacity: 0.8;">Активные события:</h3>';
+      for (const ev of data.events) {
+        const evTime = new Date(ev.timestamp).toLocaleString('ru-RU');
+        list.innerHTML += `
+          <div class="event-item ${ev.type}">
+            <div class="event-header"><span>${ev.type === 'alarm' ? '🚨 ТРЕВОГА' : '⚠️ ВНИМАНИЕ'}</span></div>
+            ${ev.comment ? `<div class="event-comment">${ev.comment}</div>` : ''}
+            <div class="event-author">Инициатор: ${ev.source}</div>
+            <div class="event-time">${evTime}</div>
+          </div>`;
+      }
+    }
+  } catch (e) {
+    console.error("Ошибка сети:", e);
+  }
+}
+
+async function requestAction(type) {
+  if (!isModerator) {
+    alert("❌ У вас нет прав модератора для управления.");
+    return;
+  }
+  
+  // Вместо prompt() теперь вызываем модальное окно
+  openCommentModal(type);
+}
+
+async function submitComment() {
+  const comment = document.getElementById('commentInput').value.trim() || 'Без комментария';
+  closeCommentModal();
+  
+  const btn = document.querySelector(pendingActionType === 'alarm' ? '.btn-al' : '.btn-a');
+  const originalText = btn.textContent;
+  btn.textContent = "Отправка...";
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API_BASE}/location/${LOC_ID}/event`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${userToken}`
+      },
+      body: JSON.stringify({ 
+        type: pendingActionType, 
+        comment, 
+        user_id: MATRIX_USER_ID,
+        room_id: ROOM_ID,
+        source: 'widget' 
+      })
+    });
+    
+    if (res.status === 401 || res.status === 403) {
+      alert("❌ Ошибка доступа: Неверный токен или у вас нет прав модератора.");
+      localStorage.removeItem(TOKEN_KEY);
+      userToken = null;
+      showLocked();
+    } else if (!res.ok) {
+      const err = await res.json().catch(() => ({detail: "Ошибка сети"}));
+      alert("Ошибка: " + (err.detail || "Неизвестная ошибка"));
+    } else {
+      fetchState();
+    }
+  } catch (e) {
+    alert("Ошибка сети: " + e.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+async function clearAll() {
+  if (!isModerator) {
+    alert("❌ У вас нет прав модератора.");
+    return;
+  }
+  
+  if (!confirm("⚠️ Вы уверены, что хотите закрыть ВСЕ активные события?")) return;
+  
+  try {
+    const res = await fetch(`${API_BASE}/location/${LOC_ID}/clear-all`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${userToken}` }
+    });
+    
+    if (res.status === 401 || res.status === 403) {
+      alert("❌ Ошибка доступа.");
+      localStorage.removeItem(TOKEN_KEY);
+      userToken = null;
+      showLocked();
+    } else if (!res.ok) {
+      alert("Ошибка при закрытии событий");
+    } else {
+      fetchState();
+    }
+  } catch (e) {
+    alert("Ошибка сети: " + e.message);
+  }
+}
+
+async function showHistory() {
+  try {
+    const res = await fetch(`${API_BASE}/location/${LOC_ID}/history`, {
+      headers: { 'Authorization': `Bearer ${userToken}` }
+    });
+    
+    if (!res.ok) {
+      alert("Не удалось загрузить историю");
+      return;
+    }
+    
+    const data = await res.json();
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    
+    let historyHtml = '';
+    if (data.events.length === 0) {
+      historyHtml = '<p style="text-align: center; opacity: 0.6;">Нет событий за последние 48 часов</p>';
+    } else {
+      for (const ev of data.events) {
+        const typeIcon = ev.type === 'alarm' ? '🚨' : '⚠️';
+        const closeReason = ev.close_reason === 'auto' ? '🤖 Авто' : ' Вручную';
+        const created = new Date(ev.timestamp).toLocaleString('ru-RU');
+        const closed = new Date(ev.closed_at).toLocaleString('ru-RU');
+        
+        historyHtml += `
+          <div class="history-item" style="border-left-color: ${ev.type === 'alarm' ? '#e03131' : '#f08c00'};">
+            <div style="font-weight: 600; margin-bottom: 4px;">${typeIcon} ${ev.type.toUpperCase()}</div>
+            <div style="font-size: 14px; opacity: 0.9;">${ev.comment || 'Без комментария'}</div>
+            <div style="font-size: 12px; opacity: 0.6; margin-top: 4px;">
+              Создано: ${created} • Закрыто: ${closed} • ${closeReason}
+            </div>
+            <div style="font-size: 12px; opacity: 0.6;">Инициатор: ${ev.source}</div>
+          </div>
+        `;
+      }
+    }
+    
+    modal.innerHTML = `
+      <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+        <h2>📜 История: {{ loc_name }}</h2>
+        ${historyHtml}
+        <div class="modal-buttons">
+          <button onclick="this.closest('.modal-overlay').remove()" style="background: #495057; color: white;">Закрыть</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+  } catch (e) {
+    alert("Ошибка: " + e.message);
+  }
+}
+
+function logout() {
+  if (confirm("Сбросить сохраненный токен на этом устройстве?")) {
+    localStorage.removeItem(TOKEN_KEY);
+    userToken = null;
+    isModerator = false;
+    location.reload();
+  }
+}
+
+// Инициализация
+if (userToken) {
+  fetchState();
+} else {
+  showLocked();
+}
+
+setInterval(fetchState, 5000);
+</script>
+
+<!-- Модальное окно для ввода комментария -->
+<div id="commentModal" class="modal-overlay">
+  <div class="modal-content">
+    <h3 id="modalTitle">Комментарий</h3>
+    <textarea id="commentInput" class="modal-input" placeholder="Опишите ситуацию (необязательно)..."></textarea>
+    <div class="modal-buttons">
+      <button onclick="submitComment()" class="btn btn-a" style="background: #339af0;">Отправить</button>
+      <button onclick="closeCommentModal()" class="btn btn-logout">Отмена</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

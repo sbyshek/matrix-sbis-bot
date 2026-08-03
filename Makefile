@@ -14,6 +14,7 @@ REGISTRY := registry-bot
 ALERT := alert_bot
 CANTEEN := canteen_api
 VOICE := voice-api
+INCIDENT := incident-dispatcher
 
 # Цвета для вывода
 COLOR_RESET := \033[0m
@@ -205,3 +206,24 @@ logs-voice: ##  Логи TASK сервисов
 
 shell-voice: ## 🐚 Bash в VOICE
 	$(COMPOSE) exec ${VOICE} bash
+
+
+# ================= INCIDENT DISPATCHER =================
+
+build-incident: ## 🚀 Собрать INCIDENT
+	$(COMPOSE) build ${INCIDENT}
+
+up-incident: ## 🚀 Запустить INCIDENT
+	$(COMPOSE) up -d ${INCIDENT}
+
+down-incident: ##  Остановить INCIDENT сервисы
+	$(COMPOSE) stop ${INCIDENT}
+
+restart-incident: ##  Рестарт VOICE сервисов
+	$(COMPOSE) restart ${INCIDENT}
+
+logs-incident: ##  Логи TASK сервисов
+	$(COMPOSE) logs -f ${INCIDENT} --tail 30
+
+shell-incident: ## 🐚 Bash в INCIDENT
+	$(COMPOSE) exec ${INCIDENT} bash

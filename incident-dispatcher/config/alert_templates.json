@@ -1,0 +1,102 @@
+{
+  "audio_templates": [
+    {
+      "id": "fire_alarm",
+      "name": "Пожарная тревога",
+      "audio_file": "fire_alarm.wav",
+      "text_for_matrix": "🚨 ВНИМАНИЕ! Пожарная тревога. Немедленно покиньте здание согласно плану эвакуации.",
+      "severity": "alarm"
+    },
+    {
+      "id": "gas_leak",
+      "name": "Утечка газа",
+      "audio_file": "gas_leak.wav",
+      "text_for_matrix": "⚠️ ЗАФИКСИРОВАНА УТЕЧКА ГАЗА. Эвакуация персонала. Не используйте открытый огонь.",
+      "severity": "alarm"
+    },
+    {
+      "id": "power_outage",
+      "name": "Отключение питания",
+      "audio_file": "power_outage.wav",
+      "text_for_matrix": "⚡ Отключение электроснабжения. Переход на резервное питание.",
+      "severity": "attention"
+    },
+    {
+      "id": "security_breach",
+      "name": "Нарушение безопасности",
+      "audio_file": "security_breach.wav",
+      "text_for_matrix": "🔒 Нарушение периметра безопасности. Всем сотрудникам оставаться на местах.",
+      "severity": "alarm"
+    },
+    {
+      "id": "evacuation",
+      "name": "Общая эвакуация",
+      "audio_file": "evacuation.wav",
+      "text_for_matrix": "🚨 ОБЩАЯ ЭВАКУАЦИЯ. Немедленно покиньте здание.",
+      "severity": "alarm"
+    },
+    {
+      "id": "drill",
+      "name": "Учебная тревога",
+      "audio_file": "drill.wav",
+      "text_for_matrix": "📋 Учебная тревога. Это тренировка. Действуйте согласно инструкциям.",
+      "severity": "attention"
+    }
+  ],
+  "location_events": {
+    "warehouse": [
+      {
+        "template_id": "fire_alarm",
+        "auto_trigger_on_alarm": true,
+        "auto_trigger_on_attention": false,
+        "subscribers": ["89234743710", "4299"]
+      },
+      {
+        "template_id": "gas_leak",
+        "auto_trigger_on_alarm": true,
+        "auto_trigger_on_attention": true,
+        "subscribers": ["89234743710", "4299"]
+      },
+      {
+        "template_id": "security_breach",
+        "auto_trigger_on_alarm": true,
+        "auto_trigger_on_attention": false,
+        "subscribers": ["89234743710", "4299"]
+      }
+    ],
+    "canteen": [
+      {
+        "template_id": "fire_alarm",
+        "auto_trigger_on_alarm": true,
+        "auto_trigger_on_attention": false,
+        "subscribers": ["4200", "4201", "4202"]
+      },
+      {
+        "template_id": "power_outage",
+        "auto_trigger_on_alarm": false,
+        "auto_trigger_on_attention": true,
+        "subscribers": ["4200", "4201"]
+      }
+    ],
+    "workshop_1": [
+      {
+        "template_id": "fire_alarm",
+        "auto_trigger_on_alarm": true,
+        "auto_trigger_on_attention": false,
+        "subscribers": ["79001234567", "4300", "4301", "4302"]
+      },
+      {
+        "template_id": "evacuation",
+        "auto_trigger_on_alarm": true,
+        "auto_trigger_on_attention": true,
+        "subscribers": ["79001234567", "4300", "4301", "4302", "4303"]
+      },
+      {
+        "template_id": "drill",
+        "auto_trigger_on_alarm": false,
+        "auto_trigger_on_attention": true,
+        "subscribers": ["4300", "4301"]
+      }
+    ]
+  }
+}

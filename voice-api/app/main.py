@@ -5,14 +5,29 @@ import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-
+import json
 from fastapi import FastAPI, Request, File, UploadFile, Form, Header, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse
 import redis.asyncio as redis
 import aiofiles
-
+import httpx
 from app.core.config import settings
 from app.core.dependencies import verify_voice_secret
+from app.services.asterisk_manager import asterisk_manager
+from app.core.subscribers import parse_subscribers_list, Subscriber, parse_subscriber
+
+from pydantic import BaseModel
+
+
+class CampaignTriggerRequest(BaseModel):
+    node_id: str
+    template_id: str
+    audio_file: str
+    text_for_matrix: str
+    subscribers: list[str]  # Формат: "number:code:description"
+    loc_id: str
+    loc_name: str
+    initiator: str
 
 # Настройка логгера
 logging.basicConfig(
@@ -49,6 +64,7 @@ async def startup_event():
     
     # Проверка подключения
     try:
+        await asterisk_manager.connect_all()
         await redis_client.ping()
         logger.info("✅ Connected to Redis")
     except Exception as e:
@@ -109,48 +125,122 @@ async def health_check():
 # =============================================================================
 # 📞 Campaign Dispatcher (для Bash-скрипта Asterisk)
 # =============================================================================
+# @app.get("/api/v1/campaign/next")
+# async def get_next_call(x_secret: str = Header(..., alias="X-Secret")):
+#     """
+#     Bash-скрипт Asterisk опрашивает этот эндпоинт, чтобы получить следующий номер для вызова.
+    
+#     Возвращает:
+#     - "WAIT" — если достигнут лимит одновременных вызовов или очередь пуста
+#     - "OK|NUMBER|INITIATOR" — если есть задача (формат для удобного парсинга в bash)
+#     """
+#     verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
+    
+#     # Проверяем текущее количество активных вызовов
+#     active = await redis_client.get("voice:active") or 0
+#     active = int(active)
+    
+#     if active >= settings.VOICE_MAX_CONCURRENT:
+#         return "WAIT"
+    
+#     # Берём номер из очереди (LIFO — последний пришёл, первый ушёл)
+#     item = await redis_client.lpop("voice:queue")
+#     if not item:
+#         return "WAIT"
+    
+#     # Формат элемента в очереди: "NUMBER|INITIATOR|CONTEXT"
+#     parts = item.split("|")
+#     number = parts[0]
+#     initiator = parts[1] if len(parts) > 1 else "unknown"
+#     prefix = parts[2] if len(parts) > 2 else "unknown"
+    
+#     # Увеличиваем счётчик активных вызовов
+#     await redis_client.incr("voice:active")
+    
+#     # Ставим TTL на счётчик (страховка, если Asterisk не вернёт /finish)
+#     await redis_client.expire("voice:active", settings.ASTERISK_CALLBACK_TIMEOUT)
+    
+#     logger.info(f"📞 Dispatched call to {number} (active: {active + 1}/{settings.VOICE_MAX_CONCURRENT})")
+    
+#     # Возвращаем в формате, удобном для bash: OK|NUMBER|INITIATOR
+#     return f"OK|{number}|{initiator}|{prefix}"
+
+
 @app.get("/api/v1/campaign/next")
 async def get_next_call(x_secret: str = Header(..., alias="X-Secret")):
     """
-    Bash-скрипт Asterisk опрашивает этот эндпоинт, чтобы получить следующий номер для вызова.
-    
-    Возвращает:
-    - "WAIT" — если достигнут лимит одновременных вызовов или очередь пуста
-    - "OK|NUMBER|INITIATOR" — если есть задача (формат для удобного парсинга в bash)
+    Возвращает следующий номер для вызова.
+    Формат ответа: "OK|NUMBER|CODE|DESCRIPTION|INITIATOR"
     """
     verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
     
-    # Проверяем текущее количество активных вызовов
+    # Проверяем лимит одновременных вызовов
     active = await redis_client.get("voice:active") or 0
     active = int(active)
     
     if active >= settings.VOICE_MAX_CONCURRENT:
         return "WAIT"
     
-    # Берём номер из очереди (LIFO — последний пришёл, первый ушёл)
+    # Берём элемент из очереди
     item = await redis_client.lpop("voice:queue")
     if not item:
         return "WAIT"
     
-    # Формат элемента в очереди: "NUMBER|INITIATOR|CONTEXT"
+    # Формат: "NUMBER|CODE|DESCRIPTION|PREFIX|CONTEXT"
     parts = item.split("|")
     number = parts[0]
-    initiator = parts[1] if len(parts) > 1 else "unknown"
+    code = parts[1] if len(parts) > 1 else ""
+    description = parts[2] if len(parts) > 2 else ""
+    prefix = parts[3] if len(parts) > 3 else "unknown"
+    context = parts[4] if len(parts) > 4 else "pa_call_file"
     
     # Увеличиваем счётчик активных вызовов
     await redis_client.incr("voice:active")
-    
-    # Ставим TTL на счётчик (страховка, если Asterisk не вернёт /finish)
     await redis_client.expire("voice:active", settings.ASTERISK_CALLBACK_TIMEOUT)
     
-    logger.info(f"📞 Dispatched call to {number} (active: {active + 1}/{settings.VOICE_MAX_CONCURRENT})")
+    # Возвращаем расширенный формат
+    initiator = f"{description} ({code})" if description and code else (description or code or "unknown")
     
-    # Возвращаем в формате, удобном для bash: OK|NUMBER|INITIATOR
-    return f"OK|{number}|{initiator}"
+    logger.info(f"📞 Dispatched call to {number} ({initiator}) via prefix {prefix}")
+    
+    return f"OK|{number}|{code}|{description}|{initiator}"
 
+# @app.post("/api/v1/campaign/push")
+# async def push_numbers(request: Request, x_secret: str = Header(..., alias="X-Secret")):
+#     verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
+    
+#     data = await request.json()
+#     numbers_data = data.get("numbers", [])
+#     prefix = data.get("prefix", "unknown")
+#     context = data.get("context", "pa_call_file")
+    
+#     count = 0
+#     for item in numbers_data:
+#         num = ''.join(filter(str.isdigit, str(item.get("number", ""))))
+#         note = item.get("note", "Без примечания")
+        
+#         if 10 <= len(num) <= 15:
+#             # Формат очереди: number|note|prefix|context
+#             payload = f"{num}|{note}|{prefix}|{context}"
+#             await redis_client.lpush("voice:queue", payload)
+#             count += 1
+            
+#     return {
+#         "status": "queued",
+#         "count": count,
+#         "queue_size": await redis_client.llen("voice:queue"),
+#         "prefix": prefix
+#     }
 
 @app.post("/api/v1/campaign/push")
-async def push_numbers(request: Request, x_secret: str = Header(..., alias="X-Secret")):
+async def push_numbers(
+    request: Request,
+    x_secret: str = Header(..., alias="X-Secret")
+):
+    """
+    Принимает список номеров для обзвона.
+    Поддерживает формат "number:code:description" для каждого номера.
+    """
     verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
     
     data = await request.json()
@@ -159,76 +249,127 @@ async def push_numbers(request: Request, x_secret: str = Header(..., alias="X-Se
     context = data.get("context", "pa_call_file")
     
     count = 0
+    parsed_subscribers = []
+    
     for item in numbers_data:
-        num = ''.join(filter(str.isdigit, str(item.get("number", ""))))
-        note = item.get("note", "Без примечания")
+        # Поддерживаем два формата:
+        # 1. {"number": "79001112233:boss:Иванов", "note": "..."}
+        # 2. {"number": "79001112233", "code": "boss", "description": "Иванов", "note": "..."}
         
-        if 10 <= len(num) <= 15:
-            # Формат очереди: number|note|prefix|context
-            payload = f"{num}|{note}|{prefix}|{context}"
-            await redis_client.lpush("voice:queue", payload)
-            count += 1
-            
+        raw_number = str(item.get("number", ""))
+        note = item.get("note", "")
+        
+        # Если number содержит ":", парсим как составную строку
+        if ":" in raw_number:
+            try:
+                sub = parse_subscriber(raw_number)
+                # Если есть note, используем его как description (если description пуст)
+                if note and not sub.description:
+                    sub.description = note
+            except ValueError as e:
+                logger.warning(f"⚠️ Invalid subscriber format: {raw_number} - {e}")
+                continue
+        else:
+            # Старый формат: только номер
+            code = item.get("code", "")
+            description = item.get("description", note)
+            sub = Subscriber(
+                number=''.join(filter(str.isdigit, raw_number)),
+                code=code,
+                description=description
+            )
+        
+        if not sub.number or len(sub.number) < 3:
+            logger.warning(f"⚠️ Skipping invalid number: {raw_number}")
+            continue
+        
+        # Формат очереди: number|code|description|prefix|context
+        payload = f"{sub.number}|{sub.code}|{sub.description}|{prefix}|{context}"
+        await redis_client.lpush("voice:queue", payload)
+        count += 1
+        parsed_subscribers.append(sub)
+    
+    logger.info(f"📥 Queued {count} subscribers for prefix {prefix}")
+    
     return {
         "status": "queued",
         "count": count,
         "queue_size": await redis_client.llen("voice:queue"),
-        "prefix": prefix
+        "prefix": prefix,
+        "subscribers": [str(sub) for sub in parsed_subscribers]
     }
 
+# =============================================================================
+# 1. ПУЛЕНЕПРОБИВАЕМЫЙ FINISH (Больше никаких 422)
+# =============================================================================
 @app.post("/api/v1/campaign/finish")
 async def finish_call(
-    request: Request,
+    number: str = Form(default="unknown"),       # Если Asterisk пришлёт пустоту, будет "unknown"
+    status: str = Form(default="completed"),     # По умолчанию
+    trunk: str = Form(default="unknown"),
+    event: str = Form(default="call_finished"),
     x_secret: str = Header(..., alias="X-Secret")
 ):
     """
     Asterisk вызывает этот эндпоинт после завершения звонка.
-    Это сбрасывает счётчик активных вызовов, позволяя запустить следующий.
+    Мы логируем факт звонка в JSONL и сбрасываем счётчик.
     """
     verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
     
-    data = await request.form()
-    number = data.get("number", "unknown")
+    # Логируем в JSONL (как ты и хотел, это надёжно и просто)
+    log_entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "number": number,
+        "status": status,
+        "event": "call_finished"
+    }
     
-    # Уменьшаем счётчик (но не ниже 0)
-    current = await redis_client.decr("voice:active")
-    if current < 0:
-        await redis_client.set("voice:active", 0)
-        current = 0
+    log_file = Path(settings.VOICE_DATA_DIR) / "calls.log.jsonl"
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+        logger.info(f"📝 Logged call to {number} (status: {status}) in JSONL")
+    except Exception as e:
+        logger.error(f"❌ Failed to write to JSONL: {e}")
     
-    logger.info(f"✅ Call to {number} finished (active: {current}/{settings.VOICE_MAX_CONCURRENT})")
+    # Сбрасываем счётчик активных вызовов
+    # current = await redis_client.decr("voice:active")
+    # if current < 0:
+    #     await redis_client.set("voice:active", 0)
+    #     current = 0
     
-    return {"status": "ok", "active": current}
+    if event == "call_finished" and trunk != "unknown" and trunk != "internal":
+        current = await redis_client.decr(f"voice:active_trunk:{trunk}")
+        if current < 0:
+            await redis_client.set(f"voice:active_trunk:{trunk}", 0)
+        
+    return {"status": "ok", "event": event}
 
 
 # =============================================================================
-# 🎙️ Voice Feedback Receiver (приём WAV от Asterisk)
+# 2. МЯГКИЙ FEEDBACK (На случай, если Asterisk всё же решит отправить файл)
 # =============================================================================
 @app.post("/api/v1/feedback")
 async def receive_feedback(
     file: UploadFile = File(...),
-    caller_id: str = Form(...),
-    initiator: str = Form(...),
+    caller_id: str = Form(default="unknown"),    # Дефолтное значение спасает от 422
+    initiator: str = Form(default="unknown"),
+    exten: str = Form(default="unknown"),        # Добавлено, чтобы не было 422 из-за лишнего поля
     x_secret: str = Header(..., alias="X-Secret"),
     background_tasks: BackgroundTasks = None
 ):
-    """
-    Принимает WAV-файл с голосовым ответом абонента.
-    Сохраняет файл и ставит задачу на транскрипцию + отправку в Matrix.
-    """
     verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
     
-    # Валидация caller_id (только цифры, 10-15 знаков)
-    if not caller_id.isdigit() or not (10 <= len(caller_id) <= 15):
-        raise HTTPException(400, detail="Invalid caller_id format")
+    # 🔥 МЯГКАЯ ВАЛИДАЦИЯ: Разрешаем любые номера от 3 цифр (для внутренних 4499 и т.д.)
+    if not caller_id.isdigit() or len(caller_id) < 3:
+        logger.warning(f"⚠️ Suspicious caller_id: '{caller_id}', but processing anyway.")
+        # Мы НЕ выбрасываем HTTPException, чтобы не ломать поток, просто логируем
     
-    # Генерируем уникальное имя файла
     task_id = uuid.uuid4().hex
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"{task_id}_{caller_id}_{timestamp}.wav"
     filepath = Path(settings.VOICE_DATA_DIR) / filename
     
-    # Сохраняем файл асинхронно
     try:
         async with aiofiles.open(filepath, 'wb') as f:
             content = await file.read()
@@ -238,120 +379,146 @@ async def receive_feedback(
         logger.error(f"❌ Failed to save file: {e}")
         raise HTTPException(500, detail="Failed to save audio file")
     
-    # Ставим фоновую задачу на обработку (STT → Matrix)
     if background_tasks:
         background_tasks.add_task(
             process_voice_feedback,
             filepath=str(filepath),
             caller_id=caller_id,
             initiator=initiator,
+            exten=exten,
             task_id=task_id
         )
         logger.info(f"🔄 Queued STT task for {task_id}")
     
+    return {"status": "accepted", "task_id": task_id, "caller_id": caller_id}
+@app.post("/api/v1/campaign/trigger-template")
+async def trigger_template_campaign(
+    request: CampaignTriggerRequest,
+    x_secret: str = Header(..., alias="X-Secret")
+):
+    """
+    Запуск кампании голосового оповещения по шаблону.
+    Вызывается из incident-dispatcher.
+    """
+    verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
+    
+    # Парсим список абонентов
+    subscribers = parse_subscribers_list(request.subscribers)
+    
+    if not subscribers:
+        raise HTTPException(400, detail="No valid subscribers in the list")
+    
+    logger.info(
+        f"🚀 Triggering campaign: template={request.template_id}, "
+        f"location={request.loc_name}, subscribers={len(subscribers)}"
+    )
+    
+    # Логирование начала кампании
+    log_entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event": "start_campaign",
+        "status": "new",
+        "template_id": request.template_id,
+        "loc_id": request.loc_id,
+        "loc_name": request.loc_name,
+        "total_subscribers": len(subscribers),
+        "node_id": request.node_id,
+        "initiator": request.initiator
+    }
+    
+    log_file = Path(settings.VOICE_DATA_DIR) / "calls.log.jsonl"
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+        logger.info(f"🚀 Logged campaign start: {request.template_id} for {request.loc_name}")
+    except Exception as e:
+        logger.error(f"❌ Failed to write campaign start to JSONL: {e}")
+    
+    # logger.info(f"🚀 Triggering campaign: template={request.template_id}, location={request.loc_name}, subscribers={len(subscribers)}")
+    
+    
+    # Запускаем кампанию через AMI
+    results = await asterisk_manager.originate_campaign(
+        node_id=request.node_id,
+        subscribers=subscribers,
+        audio_file=request.audio_file,
+        initiator=request.initiator,
+        redis_client=redis_client
+    )
+    
     return {
-        "status": "accepted",
-        "task_id": task_id,
-        "caller_id": caller_id,
-        "filename": filename
+        "status": "success",
+        "template_id": request.template_id,
+        "location": request.loc_name,
+        "total_subscribers": len(subscribers),
+        "results": results
     }
 
 
 # =============================================================================
 # 🧠 Фоновая обработка: STT + Matrix
 # =============================================================================
-async def process_voice_feedback(
-    filepath: str,
-    caller_id: str,
-    initiator: str,
-    task_id: str
-):
-    """
-    Фоновая задача: транскрибирует аудио и отправляет результат в Matrix.
-    """
-    logger.info(f"🎙️ Processing feedback: {task_id} ({caller_id})")
-    
-    try:
-        # 1. Транскрипция (если модель загружена)
-        text = ""
-        if model:
-            logger.info(f"🔊 Running Whisper on {filepath}")
-            segments, _ = model.transcribe(
-                filepath,
-                language=settings.WHISPER_LANGUAGE,
-                prompt=settings.WHISPER_PROMPT,
-                vad_filter=True,  # Убирает тишину
-                vad_parameters=dict(min_silence_duration_ms=500)
-            )
-            text = " ".join([segment.text.strip() for segment in segments]).strip()
-            logger.info(f"📝 Transcribed: {text[:100]}..." if len(text) > 100 else f"📝 Transcribed: {text}")
-        else:
-            text = "[STT не доступен]"
-            logger.warning("⚠️ Skipping STT: model not loaded")
-        
-        # 2. Отправка в Matrix (если настроено)
-        if settings.MATRIX_BOT_TOKEN and settings.MATRIX_FEEDBACK_ROOM_ID:
-            await send_to_matrix(
-                caller_id=caller_id,
-                initiator=initiator,
-                text=text,
-                audio_filename=Path(filepath).name,
-                task_id=task_id
-            )
-            logger.info(f"✅ Posted to Matrix room {settings.MATRIX_FEEDBACK_ROOM_ID}")
-        
-        # 3. Очистка файла (по истечении retention)
-        # В продакшене лучше запускать отдельный cron-воркер для массового удаления
-        # Здесь для простоты удаляем сразу после успешной обработки
-        if os.path.exists(filepath):
-            os.remove(filepath)
-            logger.info(f"🗑️ Deleted temporary file: {filepath}")
-            
-    except Exception as e:
-        logger.error(f"❌ Error processing feedback {task_id}: {e}", exc_info=True)
-        # Не выбрасываем исключение, чтобы не ломать основной поток
-        # Можно добавить повторную попытку или алерт в Matrix
+# async def process_voice_feedback(
+#     filepath: str,
+#     caller_id: str,
+#     initiator: str,
+#     exten: str,      # 🔥 Новое поле
+#     task_id: str
+# ):
+#     logger.info(f"🎙️ Processing feedback: {task_id} ({caller_id}) for exten: {exten}")
+#     try:
+#         # 1. Транскрипция (без изменений)
+#         text = ""
+#         if model:
+#             logger.info(f"🔊 Running Whisper on {filepath}")
+#             segments, _ = model.transcribe(
+#                 filepath,
+#                 language=settings.WHISPER_LANGUAGE,
+#                 prompt=settings.WHISPER_PROMPT,
+#                 vad_filter=True,
+#                 vad_parameters=dict(min_silence_duration_ms=500)
+#             )
+#             text = " ".join([segment.text.strip() for segment in segments]).strip()
+#             logger.info(f"📝 Transcribed: {text[:100]}..." if len(text) > 100 else f"📝 Transcribed: {text}")
+#         else:
+#             text = "[STT не доступен]"
 
+#         # 2. 🔥 НОВАЯ ЛОГИКА: Отправляем в incident-dispatcher (вместо Matrix)
+#         if text and text != "[STT не доступен]":
+#             try:
+#                 async with httpx.AsyncClient(timeout=15.0) as client:
+#                     payload = {
+#                         "exten": exten,
+#                         "caller_id": caller_id,
+#                         "initiator": initiator,
+#                         "comment": text
+#                     }
+#                     headers = {
+#                         "X-API-Token": settings.INCIDENT_DISPATCHER_TOKEN,
+#                         "Content-Type": "application/json"
+#                     }
+#                     url = f"{settings.INCIDENT_DISPATCHER_URL}/api/v1/incident/voice-trigger"
+                    
+#                     response = await client.post(url, json=payload, headers=headers)
+                    
+#                     if response.status_code == 200:
+#                         logger.info(f"✅ Successfully routed incident to dispatcher for exten {exten}")
+#                     else:
+#                         logger.error(f"❌ Dispatcher rejected request: {response.status_code} - {response.text}")
+                        
+#             except Exception as e:
+#                 logger.error(f"❌ Failed to call incident-dispatcher: {e}")
+#         else:
+#             logger.warning("⚠️ No text transcribed, skipping incident creation")
 
-# =============================================================================
-# 🔊 Matrix Integration
-# =============================================================================
-async def send_to_matrix(
-    caller_id: str,
-    initiator: str,
-    text: str,
-    audio_filename: str,
-    task_id: str
-):
-    """Отправляет карточку с голосовым ответом в Matrix-комнату"""
-    import httpx
-    
-    # Формируем HTML-сообщение
-    html_body = f"""
-    🎙️ <b>Голосовой ответ</b><br>
-    📞 Абонент: <code>{caller_id}</code><br>
-    👤 Инициатор: {initiator}<br>
-    📝 Текст: {text}<br>
-    🎧 Аудио: <a href="https://vpk-oil.ru/voice/{audio_filename}">скачать</a><br>
-    ⏰ {datetime.now(timezone.utc).strftime("%H:%M:%S")}
-    """
-    
-    payload = {
-        "msgtype": "m.text",
-        "format": "org.matrix.custom.html",
-        "body": f"Голосовой ответ от {caller_id}: {text}",
-        "formatted_body": html_body.strip()
-    }
-    
-    url = f"{settings.MATRIX_HOMESERVER}/_matrix/client/r0/rooms/{settings.MATRIX_FEEDBACK_ROOM_ID}/send/m.room.message"
-    headers = {
-        "Authorization": f"Bearer {settings.MATRIX_BOT_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(url, headers=headers, json=payload)
-        response.raise_for_status()
+#         # 3. Очистка файла
+#         if os.path.exists(filepath):
+#             os.remove(filepath)
+#             logger.info(f"🗑️ Deleted temporary file: {filepath}")
+
+#     except Exception as e:
+#         logger.error(f"❌ Error processing feedback {task_id}: {e}", exc_info=True)
+
 
 
 # =============================================================================

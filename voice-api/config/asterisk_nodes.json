@@ -1,0 +1,32 @@
+{
+  "nodes": [
+    {
+		"id": "zv-astreisk",
+		"name": "Астериск ЗАВОД",
+		"host": "172.17.10.10",
+		"port": 5038,
+		"username": "voice_api",
+		"secret": "acb39a7e125e7f4ea548bf3af5c949ef",
+		"internal_prefix": "4",
+		"external_trunks": ["SIP/rt_3049616", "SIP/rt_3049625", "SIP/rt_3048554", "SIP/rt_3048603", "SIP/rt_3049665"],
+        "internal_max_length": 4,
+        "max_concurrent_per_trunk": 3,
+        "caller_id": "Голосовое оповещение <9000>",
+        "active": true
+    },
+    {
+		"id": "of-astreisk",
+		"name": "Астериск ОФИС",
+		"host": "172.16.10.10",
+		"port": 5038,
+		"username": "voice_api",
+		"secret": "4465ffe22c017db9b91e5bc4db134843",
+		"internal_prefix": "4",
+		"external_trunks": ["SIP/rt_3049625"],
+        "internal_max_length": 4,
+        "max_concurrent_per_trunk": 3,
+        "caller_id": "Голосовое оповещение <9000>",
+        "active": false
+    }
+  ]
+}

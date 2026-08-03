@@ -23,3 +23,6 @@ aiofiles==24.1.0
 
 # Utils
 python-jose[cryptography]==3.3.0
+
+# Asterisk AMI
+panoramisk==1.4.0

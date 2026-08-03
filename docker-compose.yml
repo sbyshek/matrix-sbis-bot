@@ -212,9 +212,10 @@ services:
     ports:
       - "8769:8000"  # Эндпоинт для Asterisk curl
     volumes:
-      - ./voice-api/app:/app/app:ro      # Код (read-only для безопасности)
+      - ./voice-api/app:/app/app      # Код (read-only для безопасности)
       - ./voice-api/data:/app/data       # Временные WAV файлы
       - ./voice-api/logs:/app/logs       # Логи приложения
+      - ./voice-api/config:/app/config   # Конфигурационные файлы
     environment:
       - REDIS_URL=redis://redis:6379/3   # Явно указываем DB
     depends_on:
@@ -234,6 +235,38 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s                   # Ждем запуска Redis (убедись, что сервис называется redis)
+
+  incident-dispatcher:
+    build: ./incident-dispatcher
+    container_name: incident-dispatcher
+    restart: unless-stopped
+    env_file: ./incident-dispatcher/.env  # Или ./incident-dispatcher/.env, если хочешь изолировать
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_URL=redis://redis:6379/4
+    profiles:
+      - all
+      - dev
+      - prod
+    ports:
+      - "8770:8000"
+    volumes:
+      - ./incident-dispatcher/app:/app/app      # Live-reload кода
+      - ./incident-dispatcher/logs:/app/logs    # Логи
+      - ./incident-dispatcher/config:/app/config # Для locations.json
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - matrix-net
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+        compress: "true"
+
 
 networks:
   matrix-net:
