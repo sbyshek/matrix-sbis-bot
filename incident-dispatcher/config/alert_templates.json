@@ -36,10 +36,10 @@
       "severity": "alarm"
     },
     {
-      "id": "drill",
-      "name": "Учебная тревога",
-      "audio_file": "drill.wav",
-      "text_for_matrix": "📋 Учебная тревога. Это тренировка. Действуйте согласно инструкциям.",
+      "id": "drill_bpla",
+      "name": "Учебная тревога. БПЛА",
+      "audio_file": "custom/test-message-8000",
+      "text_for_matrix": "📋 Учебная тревога. Это тренировка. Отработка действий при угрозе воздействия БПЛА. Действуйте согласно инструкциям.",
       "severity": "attention"
     }
   ],
@@ -49,19 +49,25 @@
         "template_id": "fire_alarm",
         "auto_trigger_on_alarm": true,
         "auto_trigger_on_attention": false,
-        "subscribers": ["89234743710", "4299"]
+        "subscribers": [
+          "89234743710:ACX:BCX", 
+          "4299:IT:Zavod"]
       },
       {
         "template_id": "gas_leak",
         "auto_trigger_on_alarm": true,
         "auto_trigger_on_attention": true,
-        "subscribers": ["89234743710", "4299"]
+        "subscribers": [
+          "89234743710:ACX:BCX", 
+          "4299:IT:Zavod"]
       },
       {
         "template_id": "security_breach",
         "auto_trigger_on_alarm": true,
         "auto_trigger_on_attention": false,
-        "subscribers": ["89234743710", "4299"]
+        "subscribers": [
+          "89234743710:ACX:BCX", 
+          "4299:IT:Zavod"]
       }
     ],
     "canteen": [
@@ -83,16 +89,20 @@
         "template_id": "fire_alarm",
         "auto_trigger_on_alarm": true,
         "auto_trigger_on_attention": false,
-        "subscribers": ["79001234567", "4300", "4301", "4302"]
+        "subscribers": [
+          "89234743710:ACX:BCX", 
+          "4299:IT:Zavod"]
       },
       {
         "template_id": "evacuation",
         "auto_trigger_on_alarm": true,
         "auto_trigger_on_attention": true,
-        "subscribers": ["79001234567", "4300", "4301", "4302", "4303"]
+        "subscribers": [
+          "89234743710:ACX:BCX", 
+          "4299:IT:Zavod"]
       },
       {
-        "template_id": "drill",
+        "template_id": "drill_bpla",
         "auto_trigger_on_alarm": false,
         "auto_trigger_on_attention": true,
         "subscribers": ["4300", "4301"]

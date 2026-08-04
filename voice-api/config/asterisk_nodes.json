@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-		"id": "zv-astreisk",
+		"id": "zv-asterisk",
 		"name": "Астериск ЗАВОД",
 		"host": "172.17.10.10",
 		"port": 5038,
@@ -12,10 +12,15 @@
         "internal_max_length": 4,
         "max_concurrent_per_trunk": 3,
         "caller_id": "Голосовое оповещение <9000>",
-        "active": true
+        "active": true,
+		"routing_rules": [
+			{"pattern": "^4[0-4]\\d{2}$", "channel": "SIP", "description": "Локальные SIP-номера (40XX-44XX)"},
+			{"pattern": "^4[5-9]\\d{2}$", "channel": "IAX2/office", "description": "IAX-номера удалённых офисов (45XX-49XX)"},
+			{"pattern": "^8\\d{10}$", "channel": "trunk", "description": "Внешние мобильные/городские"}
+      	]
     },
     {
-		"id": "of-astreisk",
+		"id": "of-asterisk",
 		"name": "Астериск ОФИС",
 		"host": "172.16.10.10",
 		"port": 5038,

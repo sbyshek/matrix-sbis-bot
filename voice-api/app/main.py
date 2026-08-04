@@ -308,6 +308,7 @@ async def finish_call(
     status: str = Form(default="completed"),     # По умолчанию
     trunk: str = Form(default="unknown"),
     event: str = Form(default="call_finished"),
+    campaign_id: str = Form(default="unknown"),
     x_secret: str = Header(..., alias="X-Secret")
 ):
     """
@@ -320,8 +321,10 @@ async def finish_call(
     log_entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "number": number,
+        "trunk": trunk,
         "status": status,
-        "event": "call_finished"
+        "event": "call_finished",
+        "campaign_id": campaign_id
     }
     
     log_file = Path(settings.VOICE_DATA_DIR) / "calls.log.jsonl"
@@ -344,6 +347,35 @@ async def finish_call(
             await redis_client.set(f"voice:active_trunk:{trunk}", 0)
         
     return {"status": "ok", "event": event}
+
+
+@app.get("/api/v1/campaign/{campaign_id}/logs")
+async def get_campaign_logs(
+    campaign_id: str,
+    x_secret: str = Header(..., alias="X-Secret")
+):
+    """Возвращает все логи конкретной кампании"""
+    verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
+    
+    log_file = Path(settings.VOICE_DATA_DIR) / "calls.log.jsonl"
+    if not log_file.exists():
+        return {"campaign_id": campaign_id, "total_events": 0, "events": []}
+    
+    events = []
+    with open(log_file, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                entry = json.loads(line)
+                if entry.get("campaign_id") == campaign_id:
+                    events.append(entry)
+            except json.JSONDecodeError:
+                continue
+    
+    return {
+        "campaign_id": campaign_id,
+        "total_events": len(events),
+        "events": events
+    }
 
 
 # =============================================================================
@@ -391,33 +423,90 @@ async def receive_feedback(
         logger.info(f"🔄 Queued STT task for {task_id}")
     
     return {"status": "accepted", "task_id": task_id, "caller_id": caller_id}
+# @app.post("/api/v1/campaign/trigger-template")
+# async def trigger_template_campaign(
+#     request: CampaignTriggerRequest,
+#     x_secret: str = Header(..., alias="X-Secret")
+# ):
+#     """
+#     Запуск кампании голосового оповещения по шаблону.
+#     Вызывается из incident-dispatcher.
+#     """
+#     verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
+    
+#     # Парсим список абонентов
+#     subscribers = parse_subscribers_list(request.subscribers)
+    
+#     if not subscribers:
+#         raise HTTPException(400, detail="No valid subscribers in the list")
+    
+#     logger.info(
+#         f"🚀 Triggering campaign: template={request.template_id}, "
+#         f"location={request.loc_name}, subscribers={len(subscribers)}"
+#     )
+    
+#     # Логирование начала кампании
+#     log_entry = {
+#         "timestamp": datetime.now(timezone.utc).isoformat(),
+#         "event": "start_campaign",
+#         "status": "new",
+#         "template_id": request.template_id,
+#         "loc_id": request.loc_id,
+#         "loc_name": request.loc_name,
+#         "total_subscribers": len(subscribers),
+#         "node_id": request.node_id,
+#         "initiator": request.initiator
+#     }
+    
+#     log_file = Path(settings.VOICE_DATA_DIR) / "calls.log.jsonl"
+#     try:
+#         with open(log_file, "a", encoding="utf-8") as f:
+#             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+#         logger.info(f"🚀 Logged campaign start: {request.template_id} for {request.loc_name}")
+#     except Exception as e:
+#         logger.error(f"❌ Failed to write campaign start to JSONL: {e}")
+    
+#     # logger.info(f"🚀 Triggering campaign: template={request.template_id}, location={request.loc_name}, subscribers={len(subscribers)}")
+    
+    
+#     # Запускаем кампанию через AMI
+#     results = await asterisk_manager.originate_campaign(
+#         node_id=request.node_id,
+#         subscribers=subscribers,
+#         audio_file=request.audio_file,
+#         initiator=request.initiator,
+#         redis_client=redis_client
+#     )
+    
+#     return {
+#         "status": "success",
+#         "template_id": request.template_id,
+#         "location": request.loc_name,
+#         "total_subscribers": len(subscribers),
+#         "results": results
+#     }
+
+
 @app.post("/api/v1/campaign/trigger-template")
 async def trigger_template_campaign(
     request: CampaignTriggerRequest,
     x_secret: str = Header(..., alias="X-Secret")
 ):
-    """
-    Запуск кампании голосового оповещения по шаблону.
-    Вызывается из incident-dispatcher.
-    """
     verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
     
-    # Парсим список абонентов
-    subscribers = parse_subscribers_list(request.subscribers)
+    # 🔥 Генерируем уникальный ID кампании
+    campaign_id = uuid.uuid4().hex
     
+    subscribers = parse_subscribers_list(request.subscribers)
     if not subscribers:
         raise HTTPException(400, detail="No valid subscribers in the list")
     
-    logger.info(
-        f"🚀 Triggering campaign: template={request.template_id}, "
-        f"location={request.loc_name}, subscribers={len(subscribers)}"
-    )
-    
-    # Логирование начала кампании
+    # 🔥 Логируем старт кампании с campaign_id
     log_entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "event": "start_campaign",
         "status": "new",
+        "campaign_id": campaign_id,  # 🔥 НОВОЕ ПОЛЕ
         "template_id": request.template_id,
         "loc_id": request.loc_id,
         "loc_name": request.loc_name,
@@ -430,29 +519,31 @@ async def trigger_template_campaign(
     try:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-        logger.info(f"🚀 Logged campaign start: {request.template_id} for {request.loc_name}")
+        logger.info(f"🚀 Logged campaign start: {campaign_id} - {request.template_id} for {request.loc_name}")
     except Exception as e:
         logger.error(f"❌ Failed to write campaign start to JSONL: {e}")
     
-    # logger.info(f"🚀 Triggering campaign: template={request.template_id}, location={request.loc_name}, subscribers={len(subscribers)}")
+    logger.info(f"🚀 Triggering campaign: {campaign_id}, template={request.template_id}, location={request.loc_name}, subscribers={len(subscribers)}")
     
-    
-    # Запускаем кампанию через AMI
+    # 🔥 Передаём campaign_id в originate_campaign
     results = await asterisk_manager.originate_campaign(
         node_id=request.node_id,
         subscribers=subscribers,
         audio_file=request.audio_file,
         initiator=request.initiator,
-        redis_client=redis_client
+        redis_client=redis_client,
+        campaign_id=campaign_id  # 🔥 НОВОЕ ПОЛЕ
     )
     
     return {
         "status": "success",
+        "campaign_id": campaign_id,  # 🔥 Возвращаем ID, чтобы диспетчер мог сохранить
         "template_id": request.template_id,
         "location": request.loc_name,
         "total_subscribers": len(subscribers),
         "results": results
     }
+
 
 
 # =============================================================================

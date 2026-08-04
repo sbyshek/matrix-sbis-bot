@@ -31,6 +31,8 @@ from app.models import (
     AlertTriggerRequest
 )
 
+from app.alert_svc import ALERT_CONFIG, resolve_subscribers
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -520,6 +522,77 @@ async def trigger_alert_template(
         "location": loc_data["name"],
         "subscribers_count": len(subscribers),
         "voice_api_response": result
+    }
+    
+
+@app.post("/api/v1/alert/trigger")
+async def trigger_alert_template(
+    request_data: AlertTriggerRequest,
+    user: MatrixUser = Depends(get_matrix_user_write) # Твоя существующая зависимость
+):
+    """Ручной запуск шаблона голосового оповещения из UI диспетчера"""
+    
+    loc_id = request_data.loc_id
+    loc_config = ALERT_CONFIG.get("locations", {}).get(loc_id)
+    if not loc_config:
+        raise HTTPException(status_code=404, detail=f"Location '{loc_id}' not found in templates")
+    
+    template = get_template_by_id(request_data.template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail=f"Template '{request_data.template_id}' not found")
+    
+    # Находим конфигурацию события для этой локации (или берем дефолтную)
+    event_config = next((ev for ev in loc_config.get("events", []) if ev["template_id"] == template["id"]), {})
+    
+    subscribers = resolve_subscribers(loc_config, event_config)
+    if not subscribers:
+        raise HTTPException(status_code=400, detail="No subscribers configured for this alert")
+    
+    # 1. Отправляем запрос в voice-api
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            payload = {
+                "node_id": "zv-astreisk", # Пока жестко, позже можно вынести в конфиг локации
+                "template_id": template["id"],
+                "audio_file": template["audio_file"],
+                "text_for_matrix": template["text_for_matrix"],
+                "subscribers": subscribers,
+                "loc_id": loc_id,
+                "loc_name": loc_config["name"],
+                "initiator": user.user_id
+            }
+            
+            voice_api_url = CONFIG.get("voice_api_url", "http://voice-api:8000")
+            voice_api_secret = CONFIG.get("voice_api_secret", "")
+            
+            response = await client.post(
+                f"{voice_api_url}/api/v1/campaign/trigger-template",
+                json=payload,
+                headers={"X-Secret": voice_api_secret}
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"❌ voice-api returned {response.status_code}: {response.text}")
+                raise HTTPException(status_code=502, detail=f"voice-api error: {response.text}")
+                
+            voice_result = response.json()
+            
+    except httpx.RequestError as e:
+        logger.error(f"❌ Failed to connect to voice-api: {e}")
+        raise HTTPException(status_code=503, detail="voice-api unavailable")
+    
+    # 2. Параллельно отправляем текст в Matrix (используй свою существующую функцию отправки)
+    # await send_to_matrix(loc_config["matrix_room_id"], template["severity"], template["text_for_matrix"], user.user_id)
+    logger.info(f"📨 Matrix message would be sent to {loc_config['matrix_room_id']}")
+    
+    logger.info(f"✅ Alert triggered: {template['name']} for {loc_config['name']}")
+    
+    return {
+        "status": "success",
+        "template": template["name"],
+        "location": loc_config["name"],
+        "subscribers_count": len(subscribers),
+        "voice_api_response": voice_result
     }
 
 

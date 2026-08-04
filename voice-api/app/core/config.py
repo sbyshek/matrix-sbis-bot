@@ -4,6 +4,14 @@ from pathlib import Path
 from typing import Optional, List
 import json
 
+
+
+class RoutingRule(BaseModel):
+    """Правило маршрутизации по шаблону номера"""
+    pattern: str          # Regex-паттерн (например, "^4[0-4]\\d{2}$")
+    channel: str          # Тип канала (SIP, IAX2/office, trunk)
+    description: str = "" # Человекочитаемое описание
+
 class AsteriskNode(BaseModel):
     """Конфигурация одного Asterisk-узла"""
     id: str
@@ -14,11 +22,11 @@ class AsteriskNode(BaseModel):
     secret: str
     internal_prefix: str = "4"
     internal_max_length: int = 5
-    # external_trunk: str = "SIP/provider"
     external_trunks: List[str] = Field(default_factory=list)
-    caller_id: str = "Голосовое оповещение <9000>"
+    max_concurrent_per_trunk: int = 5
+    caller_id: str = "Voice Alert <8800>"
     active: bool = True
-    max_concurrent_per_trunk: int = 3
+    routing_rules: List[RoutingRule] = Field(default_factory=list)  # 🔥 НОВОЕ ПОЛЕ
     
 class AsteriskNodesConfig(BaseModel):
     """Конфигурация всех узлов"""
