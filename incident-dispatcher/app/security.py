@@ -6,6 +6,7 @@ from ipaddress import ip_address, ip_network
 import httpx
 import json
 import os
+from app.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("security")
@@ -17,6 +18,7 @@ try:
     with open(LOCATIONS_CONFIG_FILE, "r", encoding="utf-8") as f:
         LOCATIONS = json.load(f)
     logger.info(f"✅ Loaded {len(LOCATIONS)} locations")
+    logger.info(f"Items:\n {LOCATIONS.keys()} \n {LOCATIONS.values()}")
 except Exception as e:
     logger.error(f"❌ Failed to load locations: {e}")
     LOCATIONS = {}
@@ -46,6 +48,8 @@ CONFIG = {
     "asterisk_api_token": os.getenv("ASTERISK_API_TOKEN", ""),
     "dispatcher_write_token": os.getenv("DISPATCHER_WRITE_TOKEN", ""),
     "voice_api_url": os.getenv("VOICE_API_URL", "http://voice-api:8000"),
+    "voice_api_secret": os.getenv("VOICE_API_SECRET", ""),
+    "local_api_token": os.getenv("VOICE_API_SECRET", ""),
     "voice_api_secret": os.getenv("VOICE_API_SECRET", ""),
 }
 
@@ -108,7 +112,8 @@ async def verify_dashboard_access(
         raise HTTPException(status_code=401, detail="Доступ запрещен. Требуется авторизация Matrix")
     
     user_token = authorization.split(" ", 1)[1]
-    room_id = CONFIG["dashboard_room_id"]
+    # room_id = CONFIG["dashboard_room_id"]
+    room_id = settings.DASHBOARD_MATRIX_ROOM_ID
     
     if not room_id:
         raise HTTPException(status_code=500, detail="DASHBOARD_MATRIX_ROOM_ID не настроен")
@@ -138,7 +143,8 @@ async def verify_location_access_or_dashboard(
     logger.info(f"X-API-Token: {x_api_token[:20] if x_api_token else None}...")
     
     # 🔥 Проверяем глобальный токен дашборда + IP
-    dashboard_token = CONFIG.get("dashboard_token")
+    # dashboard_token = CONFIG.get("dashboard_token")
+    dashboard_token = settings.DASHBOARD_API_TOKEN
     if x_api_token and dashboard_token and x_api_token == dashboard_token:
         if check_ip_whitelist(request, CONFIG["dashboard_allowed_ips"]):
             logger.info(f"✅ Доступ к {loc_id} разрешен по токену дашборда + IP")
@@ -155,7 +161,8 @@ async def verify_matrix_moderator(room_id: str, user_token: str) -> tuple:
     """Проверяет, является ли пользователь модератором (>=50) в комнате"""
     async with httpx.AsyncClient() as client:
         whoami_resp = await client.get(
-            f"{CONFIG['hs']}/_matrix/client/v3/account/whoami",
+            # f"{CONFIG['hs']}/_matrix/client/v3/account/whoami",
+            f"{settings.MATRIX_HOMESERVER}/_matrix/client/v3/account/whoami",
             headers={"Authorization": f"Bearer {user_token}"}
         )
         if whoami_resp.status_code != 200:
@@ -163,7 +170,7 @@ async def verify_matrix_moderator(room_id: str, user_token: str) -> tuple:
         user_id = whoami_resp.json().get("user_id")
         
         members_resp = await client.get(
-            f"{CONFIG['hs']}/_matrix/client/v3/rooms/{room_id}/joined_members",
+            f"{settings.MATRIX_HOMESERVER}/_matrix/client/v3/rooms/{room_id}/joined_members",
             headers={"Authorization": f"Bearer {user_token}"}
         )
         if members_resp.status_code != 200:
@@ -205,7 +212,7 @@ async def get_matrix_user_impl(
         # 1. Узнаем, чей это токен
         logger.info(f"Запрос whoami к Matrix...")
         whoami_resp = await client.get(
-            f"{CONFIG['hs']}/_matrix/client/v3/account/whoami",
+            f"{settings.MATRIX_HOMESERVER}/_matrix/client/v3/account/whoami",
             headers={"Authorization": f"Bearer {user_token}"}
         )
         logger.info(f"Whoami response status: {whoami_resp.status_code}")
@@ -220,7 +227,7 @@ async def get_matrix_user_impl(
         # 2. Проверяем участие в комнате
         logger.info(f"Запрос joined_members...")
         members_resp = await client.get(
-            f"{CONFIG['hs']}/_matrix/client/v3/rooms/{room_id}/joined_members",
+            f"{settings.MATRIX_HOMESERVER}/_matrix/client/v3/rooms/{room_id}/joined_members",
             headers={"Authorization": f"Bearer {user_token}"}
         )
         logger.info(f"Members response status: {members_resp.status_code}")

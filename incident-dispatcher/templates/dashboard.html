@@ -1,217 +1,404 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Диспетчерский пульт</title>
-<style>
-  body { font-family: system-ui, -apple-system, sans-serif; background: #0f1115; color: #e1e7ef; margin: 0; padding: 20px; }
-  h1 { text-align: center; margin-bottom: 30px; font-weight: 300; letter-spacing: 2px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; max-width: 1400px; margin: 0 auto; }
-  
-  .card {
-    background: #1a1d24; border-radius: 16px; padding: 24px;
-    border: 3px solid transparent; transition: all 0.3s ease;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  }
-  .card.mode-normal { border-color: #2f9e44; background: linear-gradient(135deg, #142a1b 0%, #1a3320 100%); }
-  .card.mode-attention { border-color: #f08c00; background: linear-gradient(135deg, #2a2214 0%, #332818 100%); animation: pulse-attention 2s infinite; }
-  .card.mode-alarm { border-color: #e03131; background: linear-gradient(135deg, #2a1414 0%, #331818 100%); animation: pulse-alarm 1s infinite; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Диспетчерский пульт</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background: #0f1115; 
+            color: #e1e7ef; 
+            padding: 20px; 
+        }
+        h1 { 
+            text-align: center; 
+            margin-bottom: 30px; 
+            font-weight: 300; 
+            letter-spacing: 2px; 
+        }
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); 
+            gap: 20px; 
+            max-width: 1600px; 
+            margin: 0 auto; 
+        }
+        .card {
+            background: #1a1d24; 
+            border-radius: 16px; 
+            padding: 20px;
+            border: 3px solid #2f9e44; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .card.mode-attention { border-color: #f08c00; }
+        .card.mode-alarm { border-color: #e03131; }
+        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .icon { font-size: 40px; }
+        .name { font-size: 20px; font-weight: 700; }
+        .status-text { font-size: 13px; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+        
+        /* Заголовки секций */
+        .section-title { 
+            font-size: 11px; 
+            opacity: 0.6; 
+            text-transform: uppercase; 
+            letter-spacing: 1px;
+            margin: 14px 0 8px 0;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #2c3440;
+        }
+        
+        /* Сценарии оповещения */
+        .alert-item {
+            background: rgba(0,0,0,0.3); 
+            border-radius: 8px; 
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            border-left: 4px solid #495057;
+        }
+        .alert-item.severity-alarm { border-left-color: #e03131; }
+        .alert-item.severity-attention { border-left-color: #f08c00; }
+        .alert-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .alert-name { font-weight: 600; font-size: 14px; }
+        .alert-code { font-size: 10px; opacity: 0.6; font-family: monospace; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; }
+        .alert-text { font-size: 12px; opacity: 0.8; margin-bottom: 8px; line-height: 1.4; }
+        .launch-btn {
+            background: #339af0; 
+            border: none; 
+            color: white;
+            padding: 6px 12px; 
+            border-radius: 6px; 
+            cursor: pointer;
+            font-size: 12px; 
+            font-weight: 600; 
+            transition: 0.2s;
+        }
+        .launch-btn:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+        .launch-btn.severity-alarm { background: #e03131; }
+        .launch-btn.severity-attention { background: #f08c00; }
+        
+        /* Список абонентов */
+        .subscribers-box {
+            background: rgba(51, 154, 240, 0.1);
+            border: 1px solid rgba(51, 154, 240, 0.3);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+        }
+        .subscribers-title { font-size: 11px; opacity: 0.7; text-transform: uppercase; margin-bottom: 6px; }
+        .subscribers-list { font-size: 12px; line-height: 1.6; }
+        .subscriber-item { display: flex; justify-content: space-between; padding: 2px 0; }
+        .subscriber-number { font-family: monospace; opacity: 0.9; }
+        .subscriber-desc { opacity: 0.7; font-size: 11px; }
+        
+        /* События */
+        .events-list { max-height: 150px; overflow-y: auto; margin-bottom: 12px; }
+        .event-item {
+            background: rgba(0,0,0,0.3); 
+            border-radius: 6px; 
+            padding: 8px 10px; 
+            margin-bottom: 6px;
+            border-left: 3px solid; 
+            font-size: 13px;
+        }
+        .event-item.attention { border-left-color: #f08c00; }
+        .event-item.alarm { border-left-color: #e03131; }
+        .event-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-weight: 600; font-size: 12px; }
+        .event-comment { opacity: 0.9; margin-bottom: 4px; font-size: 12px; }
+        .event-meta { font-size: 10px; opacity: 0.6; }
+        .event-close {
+            background: rgba(255,255,255,0.1); 
+            border: none; 
+            color: white;
+            padding: 2px 6px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 11px;
+        }
+        
+        /* Кнопки управления */
+        .controls { display: flex; gap: 6px; flex-wrap: wrap; }
+        .btn {
+            padding: 10px 14px; 
+            border: none; 
+            border-radius: 8px; 
+            font-weight: 600;
+            cursor: pointer; 
+            font-size: 13px; 
+            transition: 0.2s; 
+            flex: 1; 
+            min-width: 80px;
+        }
+        .btn:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+        .btn-a { background: #f08c00; color: white; }
+        .btn-al { background: #e03131; color: white; }
+        .btn-clear { background: #495057; color: white; }
+        .btn-history { background: #339af0; color: white; }
 
-  .header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-  .icon { font-size: 48px; }
-  .name { font-size: 22px; font-weight: 700; }
-  .status-text { font-size: 14px; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
-
-  .events-list { margin-bottom: 16px; max-height: 200px; overflow-y: auto; }
-  .event-item {
-    background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; margin-bottom: 8px;
-    border-left: 4px solid; font-size: 14px;
-  }
-  .event-item.attention { border-left-color: #f08c00; }
-  .event-item.alarm { border-left-color: #e03131; }
-  .event-header { display: flex; justify-content: space-between; margin-bottom: 6px; font-weight: 600; }
-  .event-comment { opacity: 0.9; margin-bottom: 6px; }
-  .event-meta { font-size: 11px; opacity: 0.6; }
-  .event-close { 
-    background: rgba(255,255,255,0.1); border: none; color: white; 
-    padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;
-    transition: background 0.2s;
-  }
-  .event-close:hover { background: rgba(255,255,255,0.2); }
-
-  .controls { display: flex; gap: 8px; flex-wrap: wrap; }
-  .btn {
-    padding: 12px 16px; border: none; border-radius: 8px; font-weight: 600; 
-    cursor: pointer; font-size: 14px; transition: 0.2s; flex: 1; min-width: 80px;
-    opacity: 0.9;
-  }
-  .btn:hover { opacity: 1; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-  .btn:active { transform: translateY(0); }
-  .btn-n { background: #2f9e44; color: white; }
-  .btn-a { background: #f08c00; color: white; }
-  .btn-al { background: #e03131; color: white; }
-  .btn-clear { background: #495057; color: white; }
-
-  @keyframes pulse-attention { 
-    0% { box-shadow: 0 0 0 0 rgba(240, 140, 0, 0.4); } 
-    70% { box-shadow: 0 0 0 10px rgba(240, 140, 0, 0); } 
-    100% { box-shadow: 0 0 0 0 rgba(240, 140, 0, 0); } 
-  }
-  @keyframes pulse-alarm { 
-    0% { box-shadow: 0 0 0 0 rgba(224, 49, 49, 0.7); } 
-    70% { box-shadow: 0 0 0 15px rgba(224, 49, 49, 0); } 
-    100% { box-shadow: 0 0 0 0 rgba(224, 49, 49, 0); } 
-  }
-</style>
+        .btn-toggle-subs {
+            width: 100%;
+            background: rgba(51, 154, 240, 0.15);
+            border: 1px solid rgba(51, 154, 240, 0.4);
+            color: #74c0fc;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: left;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+        .btn-toggle-subs:hover {
+            background: rgba(51, 154, 240, 0.25);
+            color: #a5d8ff;
+        }
+        .subscribers-box {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+        }
+    </style>
 </head>
 <body>
-  <h1>📡 ДИСПЕТЧЕРСКИЙ ПУЛЬТ</h1>
-  <div id="grid" class="grid">Загрузка...</div>
-
-<script>
-
-const DASHBOARD_TOKEN = "{{ dashboard_token }}";  
-const currentPath = window.location.pathname;
-let API_BASE = '/api';
-
-if (currentPath.startsWith('/incident-dashboard/')) {
-    API_BASE = '/incident-dashboard/api';
-}
-
-// Токен из sessionStorage (если пользователь вводил его ранее)
-let userToken = sessionStorage.getItem('matrix_dashboard_token');
-
-async function apiRequest(url, method, body = null) {
-    const headers = { 'Content-Type': 'application/json' };
-    
-    if (DASHBOARD_TOKEN) {
-        headers['X-API-Token'] = DASHBOARD_TOKEN;  // ← Передаем токен
-    }
-
-    // Если есть токен, добавляем его
-    if (userToken) {
-        headers['Authorization'] = `Bearer ${userToken}`;
-    }
-    
-    const options = { method, headers };
-    if (body) options.body = JSON.stringify(body);
-    
-    const res = await fetch(`${API_BASE}/${url}`, options);
-    
-    // Если 401 — запрашиваем токен
-    if (res.status === 401) {
-        const token = prompt("🔐 Введите ваш Matrix Access Token для доступа к дашборду:");
-        if (token) {
-            sessionStorage.setItem('matrix_dashboard_token', token);
-            userToken = token;
-            return apiRequest(url, method, body); // Повторяем запрос
+    <h1>📡 ДИСПЕТЧЕРСКИЙ ПУЛЬТ</h1>
+    <div id="grid" class="grid">Загрузка...</div>
+        <script>
+        const DASHBOARD_TOKEN = "{{ dashboard_token }}";
+        const API_BASE = window.location.pathname.startsWith('/incident-dashboard/') ? '/incident-dashboard/api' : '/api';
+        let userToken = sessionStorage.getItem('matrix_dashboard_token');
+        
+        async function apiRequest(url, method, body = null) {
+            const headers = { 'Content-Type': 'application/json' };
+            if (DASHBOARD_TOKEN) headers['X-API-Token'] = DASHBOARD_TOKEN;
+            if (userToken) headers['Authorization'] = `Bearer ${userToken}`;
+            const options = { method, headers };
+            if (body) options.body = JSON.stringify(body);
+            const res = await fetch(`${API_BASE}/${url}`, options);
+            if (res.status === 401) {
+                const token = prompt("🔐 Введите ваш Matrix Access Token:");
+                if (token) {
+                    sessionStorage.setItem('matrix_dashboard_token', token);
+                    userToken = token;
+                    return apiRequest(url, method, body);
+                }
+                throw new Error("Доступ запрещен");
+            }
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({detail: "Ошибка сети"}));
+                throw new Error(err.detail || `Ошибка: ${res.status}`);
+            }
+            return await res.json();
         }
-        throw new Error("Доступ запрещен: токен не предоставлен");
-    }
-    
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({detail: "Ошибка сети"}));
-        throw new Error(err.detail || `Ошибка сервера: ${res.status}`);
-    }
-    return await res.json();
-}
-
-async function updateDashboard() {
-  try {
-    const data = await apiRequest('dashboard', 'GET');
-    
-    const grid = document.getElementById('grid');
-    grid.innerHTML = '';
-    
-    for (const [id, loc] of Object.entries(data)) {
-      const timeStr = new Date(loc.updated_at).toLocaleTimeString('ru-RU');
-      const statusMap = { normal: 'НОРМА', attention: 'ВНИМАНИЕ', alarm: 'ТРЕВОГА' };
-      
-      let eventsHtml = '';
-      if (loc.events.length > 0) {
-        eventsHtml = '<div class="events-list">';
-        for (const ev of loc.events) {
-          const evTime = new Date(ev.timestamp).toLocaleString('ru-RU');
-          eventsHtml += `
-            <div class="event-item ${ev.type}">
-              <div class="event-header">
-                <span>${ev.type === 'alarm' ? '🚨 ТРЕВОГА' : '️ ВНИМАНИЕ'}</span>
-                <button class="event-close" onclick="closeEvent('${id}', '${ev.id}')">Закрыть</button>
-              </div>
-              ${ev.comment ? `<div class="event-comment">${ev.comment}</div>` : ''}
-              <div class="event-meta">${evTime} • ${ev.source}</div>
-            </div>
-          `;
+        
+        // 🔥 НОВАЯ ФУНКЦИЯ: Переключение видимости списка
+        function toggleSubs(locId) {
+            const el = document.getElementById('subs-' + locId);
+            const btn = document.getElementById('btn-subs-' + locId);
+            if (el.style.display === 'none') {
+                el.style.display = 'block';
+                btn.innerHTML = btn.innerHTML.replace('▼', '▲');
+            } else {
+                el.style.display = 'none';
+                btn.innerHTML = btn.innerHTML.replace('▲', '▼');
+            }
         }
-        eventsHtml += '</div>';
-      }
-      
-      const card = document.createElement('div');
-      card.className = `card mode-${loc.mode}`;
-      card.innerHTML = `
-        <div class="header">
-          <div class="icon">${loc.icon}</div>
-          <div class="name">${loc.name}</div>
-        </div>
-        <div class="status-text">${statusMap[loc.mode]} • ${loc.events.length} событий</div>
-        ${eventsHtml}
-        <div class="controls">
-          <button class="btn btn-a" onclick="createIncident('${id}', 'attention')">⚠️ Вним.</button>
-          <button class="btn btn-al" onclick="createIncident('${id}', 'alarm')">🚨 Тревога</button>
-          <button class="btn btn-clear" onclick="clearAll('${id}')">Очистить всё</button>
-          <button class="btn" style="background: #495057;" onclick="showHistory('${id}')">📜 История</button>
-        </div>
-      `;
-      grid.appendChild(card);
-    }
-  } catch (e) {
-    console.error(e);
-    document.getElementById('grid').innerHTML = `
-      <div style="text-align: center; padding: 60px 20px;">
-        <div style="font-size: 72px; margin-bottom: 20px;">🔒</div>
-        <h2 style="color: #e1e7ef; margin-bottom: 12px;">Доступ запрещён</h2>
-        <p style="color: #8a95a5;">${e.message}</p>
-      </div>
-    `;
-  }
-}
 
-async function createIncident(locId, type) {
-    const comment = prompt(`Комментарий для ${type === 'alarm' ? 'ТРЕВОГИ' : 'ВНИМАНИЯ'}:`) || '';
-    try {
-        await apiRequest(`location/${locId}/event`, 'POST', { type, comment, source: 'dispatcher' });
+        async function updateDashboard() {
+            try {
+                const data = await apiRequest('dashboard', 'GET');
+                const grid = document.getElementById('grid');
+                grid.innerHTML = '';
+                
+                for (const [id, loc] of Object.entries(data)) {
+                    const statusMap = { normal: 'НОРМА', attention: 'ВНИМАНИЕ', alarm: 'ТРЕВОГА' };
+                    
+                    // 1. Рендер сценариев
+                    let alertsHtml = '';
+                    if (loc.alerts && loc.alerts.length > 0) {
+                        alertsHtml = '<div class="section-title">📢 Сценарии оповещения</div>';
+                        loc.alerts.forEach(alert => {
+                            const codeBadge = alert.trigger_code ? `<span class="alert-code">IVR: ${alert.trigger_code}</span>` : '';
+                            alertsHtml += `
+                                <div class="alert-item severity-${alert.severity}">
+                                    <div class="alert-header">
+                                        <div class="alert-name">${alert.name}</div>
+                                        ${codeBadge}
+                                    </div>
+                                    <div class="alert-text">${alert.text_for_matrix}</div>
+                                    <button class="launch-btn severity-${alert.severity}" 
+                                            onclick="triggerAlert('${id}', '${alert.template_id}', '${alert.name.replace(/'/g, "\\'")}')">
+                                        ▶ Запустить обзвон
+                                    </button>
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    // 2. 🔥 Рендер скрываемого списка абонентов
+                    let subsHtml = '';
+                    let subCount = 0;
+                    if (loc.alerts && loc.alerts.length > 0) {
+                        const allSubs = new Map();
+                        loc.alerts.forEach(alert => {
+                            (alert.subscribers || []).forEach(sub => {
+                                if (!allSubs.has(sub)) allSubs.set(sub, sub);
+                            });
+                        });
+                        subCount = allSubs.size;
+                        
+                        if (subCount > 0) {
+                            let subsListHtml = '';
+                            allSubs.forEach(sub => {
+                                const parts = sub.split(':');
+                                const number = parts[0] || sub;
+                                const desc = parts.length > 2 ? parts[2] : (parts[1] || '');
+                                subsListHtml += `<div class="subscriber-item"><span class="subscriber-number">${number}</span><span class="subscriber-desc">${desc}</span></div>`;
+                            });
+                            
+                            // 🔥 Кнопка-переключатель и скрытый блок
+                            subsHtml = `
+                                <button id="btn-subs-${id}" class="btn-toggle-subs" onclick="toggleSubs('${id}')">
+                                    👥 Список оповещения (${subCount}) ▼
+                                </button>
+                                <div id="subs-${id}" class="subscribers-box" style="display: none;">
+                                    <div class="subscribers-list">${subsListHtml}</div>
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    // 3. Рендер событий
+                    let eventsHtml = '';
+                    if (loc.events && loc.events.length > 0) {
+                        eventsHtml = '<div class="section-title">🔔 Активные события</div><div class="events-list">';
+                        loc.events.forEach(ev => {
+                            const evTime = new Date(ev.timestamp).toLocaleString('ru-RU');
+                            eventsHtml += `
+                                <div class="event-item ${ev.type}">
+                                    <div class="event-header">
+                                        <span>${ev.type === 'alarm' ? '🚨 ТРЕВОГА' : '⚠️ ВНИМАНИЕ'}</span>
+                                        <button class="event-close" onclick="closeEvent('${id}', '${ev.id}')">✕</button>
+                                    </div>
+                                    ${ev.comment ? `<div class="event-comment">${ev.comment}</div>` : ''}
+                                    <div class="event-meta">${evTime} • ${ev.source}</div>
+                                </div>
+                            `;
+                        });
+                        eventsHtml += '</div>';
+                    }
+                    
+                    const card = document.createElement('div');
+                    card.className = `card mode-${loc.mode}`;
+                    card.innerHTML = `
+                        <div class="header">
+                            <div class="icon">${loc.icon}</div>
+                            <div class="name">${loc.name}</div>
+                        </div>
+                        <div class="status-text">${statusMap[loc.mode]} • ${loc.events.length} событий</div>
+                        ${alertsHtml}
+                        ${subsHtml}
+                        ${eventsHtml}
+                        <div class="controls">
+                            <button class="btn btn-a" onclick="createIncident('${id}', 'attention')">⚠️ Вним.</button>
+                            <button class="btn btn-al" onclick="createIncident('${id}', 'alarm')">🚨 Тревога</button>
+                            <button class="btn btn-clear" onclick="clearAll('${id}')">Очистить</button>
+                            <button class="btn btn-history" onclick="showHistory('${id}')">📜 История</button>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                }
+            } catch (e) {
+                console.error(e);
+                document.getElementById('grid').innerHTML = `<div style="text-align: center; padding: 60px;">Ошибка: ${e.message}</div>`;
+            }
+        }
+        
+        async function triggerAlert(locId, templateId, templateName) {
+            if (!confirm(`Запустить "${templateName}"?\n\nБудет выполнен голосовой обзвон всех абонентов.`)) return;
+            try {
+                const res = await fetch(`${API_BASE}/v1/alert/trigger`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Token': DASHBOARD_TOKEN
+                    },
+                    body: JSON.stringify({ template_id: templateId, loc_id: locId })
+                });
+                if (res.ok) {
+                    const result = await res.json();
+                    alert(`✅ "${templateName}" запущено!\nCampaign ID: ${result.campaign_id || 'N/A'}`);
+                    updateDashboard();
+                } else {
+                    const err = await res.json();
+                    alert(`❌ Ошибка: ${err.detail}`);
+                }
+            } catch (e) {
+                alert(`Ошибка сети: ${e.message}`);
+            }
+        }
+        
+        async function createIncident(locId, type) {
+            const comment = prompt(`Комментарий для ${type === 'alarm' ? 'ТРЕВОГИ' : 'ВНИМАНИЯ'}:`) || '';
+            try {
+                await apiRequest(`location/${locId}/event`, 'POST', { type, comment, source: 'dispatcher' });
+                updateDashboard();
+            } catch (e) { alert('Ошибка: ' + e.message); }
+        }
+        
+        async function closeEvent(locId, eventId) {
+            if (!confirm('Закрыть событие?')) return;
+            try {
+                await apiRequest(`location/${locId}/close`, 'POST', { event_id: eventId });
+                updateDashboard();
+            } catch (e) { alert('Ошибка: ' + e.message); }
+        }
+        
+        async function clearAll(locId) {
+            if (!confirm('Закрыть ВСЕ события?')) return;
+            try {
+                await apiRequest(`location/${locId}/clear-all`, 'POST');
+                updateDashboard();
+            } catch (e) { alert('Ошибка: ' + e.message); }
+        }
+        
+        async function showHistory(locId) {
+            try {
+                const data = await apiRequest(`location/${locId}/history`, 'GET');
+                const modal = document.createElement('div');
+                modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                let html = '<div style="background:#1a1d24;padding:30px;border-radius:16px;max-width:600px;width:100%;max-height:80vh;overflow-y:auto;">';
+                html += `<h2 style="color:#e1e7ef;margin-top:0;">📜 История: ${data.loc_name}</h2>`;
+                if (data.events.length === 0) {
+                    html += '<p style="opacity:0.6;">Нет событий за последние 48 часов</p>';
+                } else {
+                    data.events.forEach(ev => {
+                        const icon = ev.type === 'alarm' ? '🚨' : '⚠️';
+                        const created = new Date(ev.timestamp).toLocaleString('ru-RU');
+                        const closed = ev.closed_at ? new Date(ev.closed_at).toLocaleString('ru-RU') : '—';
+                        const reason = ev.close_reason === 'auto' ? '🤖 Авто' : '🖐 Вручную';
+                        html += `<div style="background:rgba(255,255,255,0.05);padding:12px;border-radius:8px;margin-bottom:8px;border-left:4px solid ${ev.type === 'alarm' ? '#e03131' : '#f08c00'};">
+                            <div style="font-weight:600;margin-bottom:4px;">${icon} ${ev.type.toUpperCase()}</div>
+                            <div style="font-size:14px;opacity:0.9;">${ev.comment || 'Без комментария'}</div>
+                            <div style="font-size:12px;opacity:0.6;margin-top:4px;">Создано: ${created} • Закрыто: ${closed} • ${reason}</div>
+                            <div style="font-size:12px;opacity:0.6;">Инициатор: ${ev.source}</div>
+                        </div>`;
+                    });
+                }
+                html += '<div style="margin-top:20px;"><button onclick="this.closest(\'div[style*="position:fixed"]\').remove()" style="background:#495057;color:white;border:none;padding:12px 24px;border-radius:8px;font-weight:600;cursor:pointer;">Закрыть</button></div>';
+                html += '</div>';
+                modal.innerHTML = html;
+                modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+                document.body.appendChild(modal);
+            } catch (e) { alert('Ошибка: ' + e.message); }
+        }
+        
         updateDashboard();
-    } catch (e) { alert('Ошибка: ' + e.message); }
-}
-
-async function closeEvent(locId, eventId) {
-    if (!confirm('Закрыть это событие?')) return;
-    try {
-        await apiRequest(`location/${locId}/close`, 'POST', { event_id: eventId });
-        updateDashboard();
-    } catch (e) { alert('Ошибка: ' + e.message); }
-}
-
-async function clearAll(locId) {
-    if (!confirm('Закрыть ВСЕ события для этой локации?')) return;
-    try {
-        await apiRequest(`location/${locId}/clear-all`, 'POST');
-        updateDashboard();
-    } catch (e) { alert('Ошибка: ' + e.message); }
-}
-
-async function showHistory(locId) {
-    try {
-        const data = await apiRequest(`location/${locId}/history`, 'GET');
-        // ... (код модального окна истории, как раньше) ...
-    } catch (e) {
-        alert('Ошибка: ' + e.message);
-    }
-}
-
-updateDashboard();
-setInterval(updateDashboard, 3000);
-</script>
+        setInterval(updateDashboard, 5000);
+    </script>
 </body>
 </html>

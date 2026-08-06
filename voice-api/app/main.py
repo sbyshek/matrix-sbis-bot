@@ -349,6 +349,51 @@ async def finish_call(
     return {"status": "ok", "event": event}
 
 
+@app.get("/api/v1/campaigns/list")
+async def list_campaigns(
+    limit: int = 50,
+    x_secret: str = Header(..., alias="X-Secret")
+):
+    """Возвращает список последних кампаний"""
+    verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
+    
+    log_file = Path(settings.VOICE_DATA_DIR) / "calls.log.jsonl"
+    if not log_file.exists():
+        return {"campaigns": []}
+    
+    campaigns = {}
+    try:
+        with open(log_file, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                    campaign_id = entry.get("campaign_id")
+                    if campaign_id and campaign_id != "unknown":
+                        if campaign_id not in campaigns:
+                            campaigns[campaign_id] = {
+                                "campaign_id": campaign_id,
+                                "timestamp": entry.get("timestamp"),
+                                "template_id": entry.get("template_id"),
+                                "loc_name": entry.get("loc_name"),
+                                "total_subscribers": entry.get("total_subscribers"),
+                                "event_count": 0
+                            }
+                        campaigns[campaign_id]["event_count"] += 1
+                except json.JSONDecodeError:
+                    continue
+    except Exception as e:
+        logger.error(f"❌ Failed to read history: {e}")
+        return {"campaigns": []}
+    
+    # Сортируем по времени (новые сначала)
+    sorted_campaigns = sorted(
+        campaigns.values(),
+        key=lambda x: x["timestamp"] or "",
+        reverse=True
+    )[:limit]
+    
+    return {"campaigns": sorted_campaigns}
+
 @app.get("/api/v1/campaign/{campaign_id}/logs")
 async def get_campaign_logs(
     campaign_id: str,

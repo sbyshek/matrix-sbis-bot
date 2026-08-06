@@ -1,7 +1,12 @@
 import json
 from pathlib import Path
 import logging
+
+
+
 logger = logging.getLogger(__name__)
+
+
 
 # Загрузка шаблонов оповещений
 ALERT_TEMPLATES_FILE = "config/alert_templates.json"
@@ -25,3 +30,4 @@ def resolve_subscribers(loc_config: dict, event_config: dict) -> list[str]:
     if event_subs is not None and len(event_subs) > 0:
         return event_subs
     return loc_config.get("default_subscribers", [])
+

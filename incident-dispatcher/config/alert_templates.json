@@ -3,8 +3,8 @@
     {
       "id": "fire_alarm",
       "name": "Пожарная тревога",
-      "audio_file": "fire_alarm.wav",
-      "text_for_matrix": "🚨 ВНИМАНИЕ! Пожарная тревога. Немедленно покиньте здание согласно плану эвакуации.",
+      "audio_file": "custom/test-message-8000",
+      "text_for_matrix": " ВНИМАНИЕ! Пожарная тревога. Немедленно покиньте здание согласно плану эвакуации.",
       "severity": "alarm"
     },
     {
@@ -39,7 +39,7 @@
       "id": "drill_bpla",
       "name": "Учебная тревога. БПЛА",
       "audio_file": "custom/test-message-8000",
-      "text_for_matrix": "📋 Учебная тревога. Это тренировка. Отработка действий при угрозе воздействия БПЛА. Действуйте согласно инструкциям.",
+      "text_for_matrix": " Учебная тревога. Это тренировка. Отработка действий при угрозе воздействия БПЛА. Действуйте согласно инструкциям.",
       "severity": "attention"
     }
   ],
@@ -49,25 +49,22 @@
         "template_id": "fire_alarm",
         "auto_trigger_on_alarm": true,
         "auto_trigger_on_attention": false,
-        "subscribers": [
-          "89234743710:ACX:BCX", 
-          "4299:IT:Zavod"]
+        "trigger_code": "1001",
+        "subscribers": ["89234743710:ACX:BCX", "4299:IT:Zavod"]
       },
       {
-        "template_id": "gas_leak",
+        "template_id": "drill_bpla",
         "auto_trigger_on_alarm": true,
         "auto_trigger_on_attention": true,
-        "subscribers": [
-          "89234743710:ACX:BCX", 
-          "4299:IT:Zavod"]
+        "trigger_code": "9111",
+        "subscribers": ["89234743710:ACX:BCX", "4299:IT:Zavod", "4591:IT:Office"]
       },
       {
         "template_id": "security_breach",
         "auto_trigger_on_alarm": true,
         "auto_trigger_on_attention": false,
-        "subscribers": [
-          "89234743710:ACX:BCX", 
-          "4299:IT:Zavod"]
+        "trigger_code": "911",
+        "subscribers": ["89234743710:ACX:BCX", "4299:IT:Zavod"]
       }
     ],
     "canteen": [
@@ -75,12 +72,14 @@
         "template_id": "fire_alarm",
         "auto_trigger_on_alarm": true,
         "auto_trigger_on_attention": false,
+        "trigger_code": "911",
         "subscribers": ["4200", "4201", "4202"]
       },
       {
         "template_id": "power_outage",
         "auto_trigger_on_alarm": false,
         "auto_trigger_on_attention": true,
+        "trigger_code": "911",
         "subscribers": ["4200", "4201"]
       }
     ],
@@ -89,22 +88,21 @@
         "template_id": "fire_alarm",
         "auto_trigger_on_alarm": true,
         "auto_trigger_on_attention": false,
-        "subscribers": [
-          "89234743710:ACX:BCX", 
-          "4299:IT:Zavod"]
+        "trigger_code": "911",
+        "subscribers": ["89234743710:ACX:BCX", "4299:IT:Zavod"]
       },
       {
         "template_id": "evacuation",
         "auto_trigger_on_alarm": true,
         "auto_trigger_on_attention": true,
-        "subscribers": [
-          "89234743710:ACX:BCX", 
-          "4299:IT:Zavod"]
+        "trigger_code": "911",
+        "subscribers": ["89234743710:ACX:BCX", "4299:IT:Zavod"]
       },
       {
         "template_id": "drill_bpla",
         "auto_trigger_on_alarm": false,
         "auto_trigger_on_attention": true,
+        "trigger_code": "911",
         "subscribers": ["4300", "4301"]
       }
     ]

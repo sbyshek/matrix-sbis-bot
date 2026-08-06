@@ -1,37 +1,42 @@
 {
-  "workshop_1": {
-    "name": "Цех №1",
-    "room_id": "!abc123workshop:yourdomain.ru",
-    "icon": "🏭",
-    "asterisk_exten": "810",
-    "asterisk_node": "zv-asterisk",
-    "allowed_ips": ["192.168.1.0/24", "10.0.0.5"],
-    "api_token": "optional_token_for_external_sensors",
-    "templates": {
-      "attention": "⚠️ **Цех №1: ВНИМАНИЕ**\n{comment}\nВремя: {time}",
-      "alarm": "🚨 **Цех №1: ТРЕВОГА!**\n{comment}\nВремя: {time}"
-    }
-  },
-  "canteen": {
-    "name": "Столовая",
-    "room_id": "!def456canteen:yourdomain.ru",
-    "icon": "🍽️",
-    "asterisk_exten": "807",
-    "asterisk_node": "zv-asterisk",
-    "allowed_ips": [],
-    "api_token": ""
-  },
   "warehouse": {
     "name": "Склад ГСМ",
     "room_id": "!eKbuPLKwTUsObgZFOu:matrix.vpk-oil.ru",
     "icon": "🛢️",
-    "asterisk_exten": "801",
     "asterisk_node": "zv-asterisk",
-    "allowed_ips": [],
-    "api_token": "",
-    "templates": {
-      "attention": "⚠️ **Склад: Повышенное внимание**\n{comment}\n{time}",
-      "alarm": "🚨 **Склад: АВАРИЙНАЯ СИТУАЦИЯ**\n{comment}\nНемедленная эвакуация!\n{time}"
-    }
+    "alerts": [
+      {
+        "template_id": "fire_alarm",
+        "name": "Пожарная тревога",
+        "severity": "alarm",
+        "trigger_code": "1001",
+        "matrix_text": "🚨 **Склад ГСМ: ПОЖАРНАЯ ТРЕВОГА!**\nИнициатор: {author}\nВремя: {time}",
+        "subscribers": ["89234743710:ACX:BCX", "4299:IT:Zavod"]
+      },
+      {
+        "template_id": "drill_bpla",
+        "name": "Учебная тревога. БПЛА",
+        "severity": "attention",
+        "trigger_code": "911",
+        "matrix_text": "⚠️ **Склад ГСМ: Учебная тревога (БПЛА)**\nИнициатор: {author}\nВремя: {time}",
+        "subscribers": ["89234743710:ACX:BCX", "4299:IT:Zavod", "4591:IT:Office"]
+      }
+    ]
+  },
+  "workshop_1": {
+    "name": "Цех №1",
+    "room_id": "!abc123workshop:yourdomain.ru",
+    "icon": "🏭",
+    "asterisk_node": "zv-asterisk",
+    "alerts": [
+      {
+        "template_id": "fire_alarm",
+        "name": "Пожарная тревога",
+        "severity": "alarm",
+        "trigger_code": "911",
+        "matrix_text": "🚨 **Цех №1: ПОЖАРНАЯ ТРЕВОГА!**\nИнициатор: {author}\nВремя: {time}",
+        "subscribers": ["4300", "4301"]
+      }
+    ]
   }
 }
