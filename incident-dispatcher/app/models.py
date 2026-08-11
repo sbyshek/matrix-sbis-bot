@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
 
 # --- Pydantic модели ---
@@ -30,3 +30,11 @@ class VoiceTriggerRequest(BaseModel):
 class AlertTriggerRequest(BaseModel):
     template_id: str
     loc_id: str
+    
+    
+class BulkAlertTriggerRequest(BaseModel):
+    template_id: str
+    loc_ids: List[str]  # Список ID локаций
+    
+class DeskAlertTriggerRequest(BaseModel):
+    template_id: str

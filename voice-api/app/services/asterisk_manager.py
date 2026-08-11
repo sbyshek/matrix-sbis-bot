@@ -1,41 +1,39 @@
 """
-Сервис для управления Asterisk через AMI (Asterisk Manager Interface).
-Использует библиотеку panoramisk для асинхронной работы.
+Сервис для управления Asterisk через AMI с очередью и retry.
 """
-
 import asyncio
 import logging
+import json
 from panoramisk import Manager
 from app.core.config import asterisk_config, AsteriskNode
 from app.core.subscribers import Subscriber
 import redis.asyncio as redis
 import random
 import re
-
-
-    
-
+from typing import List, Dict, Optional
 
 logger = logging.getLogger("voice-api.ami")
 
+MAX_RETRIES = 2
+RETRY_DELAY = 60  # секунд
+
+
 class AsteriskManagerService:
-    """Управляет подключениями к Asterisk-узлам и инициирует звонки"""
+    """Управляет подключениями к Asterisk-узлам и инициирует звонки с очередью"""
     
     def __init__(self):
-        self.managers = {}  # node_id -> Manager instance
-        self.connecting = {}  # node_id -> asyncio.Lock (защита от гонок)
+        self.managers = {}
+        self.connecting = {}
+        self.active_workers = {}  # campaign_id -> worker task
     
     async def _connect_node(self, node: AsteriskNode) -> Manager:
-        """Подключение к одному узлу с защитой от гонок"""
         if node.id in self.managers:
             return self.managers[node.id]
         
-        # Блокировка, чтобы два одновременных запроса не создали два соединения
         if node.id not in self.connecting:
             self.connecting[node.id] = asyncio.Lock()
         
         async with self.connecting[node.id]:
-            # Двойная проверка после захвата локи
             if node.id in self.managers:
                 return self.managers[node.id]
             
@@ -58,17 +56,14 @@ class AsteriskManagerService:
                 raise
     
     async def get_manager(self, node_id: str) -> Manager:
-        """Получить менеджер узла (лениво + кэш)"""
         node = next((n for n in asterisk_config.nodes if n.id == node_id), None)
         if not node:
             raise ValueError(f"Node '{node_id}' not found in config")
         if not node.active:
             raise ValueError(f"Node '{node_id}' is inactive")
-        
         return await self._connect_node(node)
     
     async def connect_all(self):
-        """Eager-подключение всех узлов при старте"""
         logger.info("🌐 Eager-connecting to all Asterisk nodes...")
         for node in asterisk_config.nodes:
             if node.active:
@@ -78,38 +73,23 @@ class AsteriskManagerService:
                     logger.warning(f"⚠️ Node {node.id} unavailable at startup: {e}")
     
     def is_internal_number(self, node: AsteriskNode, number: str) -> bool:
-        """
-        Определяет, является ли номер внутренним.
-        Критерии: начинается с internal_prefix И длина <= internal_max_length
-        """
         return (
-            number.startswith(node.internal_prefix) and 
+            number.startswith(node.internal_prefix) and
             len(number) <= node.internal_max_length and
             number.isdigit()
         )
     
     def resolve_channel(self, node: AsteriskNode, number: str) -> tuple[str, str]:
-        """
-        Определяет тип канала для номера по правилам маршрутизации.
-        
-        Returns:
-            (channel_string, channel_type_label)
-            Например: ("SIP/4299", "SIP") или ("IAX2/office/4591", "IAX2")
-        """
-        # Сначала проверяем routing_rules из конфига
         for rule in node.routing_rules:
             if re.match(rule.pattern, number):
                 if rule.channel == "trunk":
-                    # Для внешних номеров выбираем случайный транк
                     if not node.external_trunks:
                         raise ValueError(f"No external trunks configured for number {number}")
                     trunk = random.choice(node.external_trunks)
                     return f"{trunk}/{number}", "trunk"
                 else:
-                    # Для внутренних (SIP, IAX2 и т.д.)
                     return f"{rule.channel}/{number}", rule.channel
         
-        # Fallback: если ни одно правило не подошло
         if len(number) <= node.internal_max_length and number.startswith(node.internal_prefix):
             return f"SIP/{number}", "SIP"
         else:
@@ -117,137 +97,54 @@ class AsteriskManagerService:
                 raise ValueError(f"No external trunks configured for number {number}")
             trunk = random.choice(node.external_trunks)
             return f"{trunk}/{number}", "trunk"
-            
-    # async def originate_call(
-    #     self, 
-    #     node_id: str, 
-    #     subscriber: Subscriber,
-    #     audio_file: str,
-    #     initiator: str = "Voice API",
-    #     target_exten: str = "unknown",
-    #     redis_client: redis.Redis = None,
-    #     campaign_id: str = None
-    # ) -> dict:
-    #     """Инициировать умный звонок через кастомный контекст FreePBX"""
-    #     manager = await self.get_manager(node_id)
-    #     node = next(n for n in asterisk_config.nodes if n.id == node_id)
-        
-    #     is_internal = self.is_internal_number(node, subscriber.number)
-        
-    #     if is_internal:
-    #         channel = f"SIP/{subscriber.number}"
-    #         selected_trunk = "internal"
-    #         logger.info(f"📞 Originating internal call to {subscriber.display_name}")
-    #     else:
-    #         # 🔥 ВЫБОР ТРАНКА: Берем случайный из списка для балансировки
-    #         if not node.external_trunks:
-    #             return {"status": "error", "subscriber": subscriber.display_name, "error": "No external trunks configured"}
-            
-    #         selected_trunk = random.choice(node.external_trunks)
-    #         channel = f"{selected_trunk}/{subscriber.number}"
-    #         logger.info(f"📞 Originating external call to {subscriber.display_name} via trunk {selected_trunk}")
-            
-    #         # 🔥 ПРОВЕРКА ЛИМИТА НА ТРАНК
-    #         trunk_key = f"voice:active_trunk:{selected_trunk}"
-    #         active = await redis_client.get(trunk_key) or 0
-    #         active = int(active)
-            
-    #         if active >= node.max_concurrent_per_trunk:
-    #             logger.warning(f"⚠️ Trunk {selected_trunk} is at max capacity ({active}/{node.max_concurrent_per_trunk})")
-    #             return {
-    #                 "status": "error",
-    #                 "subscriber": subscriber.display_name,
-    #                 "error": f"Trunk {selected_trunk} is at max capacity"
-    #             }
-            
-    #         # Увеличиваем счетчик и ставим TTL на всякий случай
-    #         await redis_client.incr(trunk_key)
-    #         await redis_client.expire(trunk_key, 3600)
-
-    #     # Формируем строку переменных для передачи в Asterisk
-    #     variables = (
-    #         f"TARGET_NUMBER={subscriber.number},"
-    #         f"AUDIO_FILE={audio_file},"
-    #         f"INITIATOR={initiator},"
-    #         f"TARGET_EXTEN={target_exten},"
-    #         f"ALERT_CALLERID={node.caller_id},"
-    #         f"EXTERNAL_TRUNK={selected_trunk}",  # 🔥 Передаем выбранный транк в Asterisk
-    #         f"CAMPAIGN_ID={campaign_id}"
-    #     )
-        
-    #     try:
-    #         responses = await manager.send_action({
-    #             'Action': 'Originate',
-    #             'Channel': 'Local/s@pa_call_file_new',
-    #             'Context': 'pa_call_file_new',
-    #             'Exten': 's',
-    #             'Priority': '1',
-    #             'Variable': variables,
-    #             'Async': 'true'
-    #         })
-            
-    #         response_status = responses.get('Response', '') if hasattr(responses, 'get') else str(responses)
-            
-    #         if 'Success' in response_status:
-    #             logger.info(f"✅ Successfully queued alert call to {subscriber.display_name}")
-    #             return {
-    #                 "status": "success",
-    #                 "subscriber": subscriber.display_name,
-    #                 "number": subscriber.number,
-    #                 "type": "internal" if is_internal else "external",
-    #                 "trunk": selected_trunk,
-    #                 "node": node_id,
-    #                 "campaign_id": campaign_id
-    #             }
-    #         else:
-    #             error_msg = responses.get('Message', 'Unknown error') if hasattr(responses, 'get') else str(responses)
-    #             logger.error(f"❌ Failed to queue call to {subscriber.display_name}: {error_msg}")
-    #             # Если ошибка, уменьшаем счетчик транка
-    #             if not is_internal:
-    #                 await redis_client.decr(f"voice:active_trunk:{selected_trunk}")
-    #             return {
-    #                 "status": "error",
-    #                 "subscriber": subscriber.display_name,
-    #                 "error": error_msg,
-    #                 "campaign_id": campaign_id
-    #             }
-                
-    #     except Exception as e:
-    #         logger.error(f"❌ Exception while originating call to {subscriber.display_name}: {e}")
-    #         if not is_internal:
-    #             await redis_client.decr(f"voice:active_trunk:{selected_trunk}")
-    #         return {
-    #             "status": "error",
-    #             "subscriber": subscriber.display_name,
-    #             "error": str(e)
-    #         }
-
-
+    
+    async def _get_trunk_load(self, redis_client: redis.Redis, trunk_name: str) -> int:
+        """Получить текущую загрузку транка"""
+        trunk_key = f"voice:active_trunk:{trunk_name}"
+        active = await redis_client.get(trunk_key) or 0
+        return int(active)
+    
+    async def _get_available_slots(self, node: AsteriskNode, redis_client: redis.Redis) -> Dict[str, int]:
+        """Получить доступные слоты по каждому транку"""
+        available = {}
+        for trunk in node.external_trunks:
+            load = await self._get_trunk_load(redis_client, trunk)
+            slots = max(0, node.max_concurrent_per_trunk - load)
+            if slots > 0:
+                available[trunk] = slots
+        return available
+    
     async def originate_call(
-        self, 
-        node_id: str, 
+        self,
+        node_id: str,
         subscriber: Subscriber,
         audio_file: str,
         initiator: str = "Voice API",
         target_exten: str = "unknown",
         redis_client: redis.Redis = None,
-        campaign_id: str = None
+        campaign_id: str = None,
+        retry_count: int = 0
     ) -> dict:
-        """Инициировать умный звонок через кастомный контекст FreePBX"""
+        """Инициировать звонок с поддержкой retry"""
         manager = await self.get_manager(node_id)
         node = next(n for n in asterisk_config.nodes if n.id == node_id)
         
-        # 🔥 Определяем канал по правилам маршрутизации
         try:
             dial_string, channel_type = self.resolve_channel(node, subscriber.number)
         except ValueError as e:
-            return {"status": "error", "subscriber": subscriber.display_name, "error": str(e), "campaign_id": campaign_id}
+            return {
+                "status": "error",
+                "subscriber": subscriber.display_name,
+                "error": str(e),
+                "campaign_id": campaign_id,
+                "retry_count": retry_count
+            }
         
-        logger.info(f"📞 Originating call to {subscriber.display_name} via {dial_string} (type: {channel_type})")
+        logger.info(f" Originating call to {subscriber.display_name} via {dial_string} (type: {channel_type}, retry: {retry_count})")
         
-        # 🔥 Проверка лимита для внешних транков
+        # Проверка лимита для внешних транков
         if channel_type == "trunk" and redis_client:
-            trunk_name = dial_string.rsplit("/", 1)[0]  # Извлекаем имя транка из "SIP/rt_3049625/8923..."
+            trunk_name = dial_string.rsplit("/", 1)[0]
             trunk_key = f"voice:active_trunk:{trunk_name}"
             active = await redis_client.get(trunk_key) or 0
             active = int(active)
@@ -258,19 +155,21 @@ class AsteriskManagerService:
                     "status": "error",
                     "subscriber": subscriber.display_name,
                     "error": f"Trunk {trunk_name} at max capacity",
-                    "campaign_id": campaign_id
+                    "campaign_id": campaign_id,
+                    "retry_count": retry_count,
+                    "retryable": True
                 }
             
             await redis_client.incr(trunk_key)
             await redis_client.expire(trunk_key, 3600)
-
+        
         variables = (
             f"TARGET_NUMBER={subscriber.number},"
             f"AUDIO_FILE={audio_file},"
             f"INITIATOR={initiator},"
             f"TARGET_EXTEN={target_exten},"
             f"ALERT_CALLERID={node.caller_id},"
-            f"DIAL_STRING={dial_string},"  # 🔥 Передаём готовую строку Dial в Asterisk
+            f"DIAL_STRING={dial_string},"
             f"CHANNEL_TYPE={channel_type},"
             f"CAMPAIGN_ID={campaign_id or 'unknown'}"
         )
@@ -278,7 +177,7 @@ class AsteriskManagerService:
         try:
             responses = await manager.send_action({
                 'Action': 'Originate',
-                'Channel': 'Local/s@pa_call_file_new/n',  # 🔥 ФЛАГ /n — УБИРАЕТ ДВОЙНОЙ ЗВОНОК!
+                'Channel': 'Local/s@pa_call_file_new/n',
                 'Context': 'pa_call_file_new',
                 'Exten': 's',
                 'Priority': '1',
@@ -297,7 +196,8 @@ class AsteriskManagerService:
                     "channel": dial_string,
                     "type": channel_type,
                     "node": node_id,
-                    "campaign_id": campaign_id
+                    "campaign_id": campaign_id,
+                    "retry_count": retry_count
                 }
             else:
                 error_msg = responses.get('Message', 'Unknown error') if hasattr(responses, 'get') else str(responses)
@@ -309,9 +209,10 @@ class AsteriskManagerService:
                     "status": "error",
                     "subscriber": subscriber.display_name,
                     "error": error_msg,
-                    "campaign_id": campaign_id
+                    "campaign_id": campaign_id,
+                    "retry_count": retry_count,
+                    "retryable": True
                 }
-                
         except Exception as e:
             logger.error(f"❌ Exception originating call to {subscriber.display_name}: {e}")
             if channel_type == "trunk" and redis_client:
@@ -321,11 +222,112 @@ class AsteriskManagerService:
                 "status": "error",
                 "subscriber": subscriber.display_name,
                 "error": str(e),
-                "campaign_id": campaign_id
+                "campaign_id": campaign_id,
+                "retry_count": retry_count,
+                "retryable": True
             }
-
-
-
+    
+    async def _campaign_queue_worker(
+        self,
+        campaign_id: str,
+        node_id: str,
+        audio_file: str,
+        initiator: str,
+        redis_client: redis.Redis
+    ):
+        """Фоновый worker для обработки очереди внешних звонков"""
+        logger.info(f"🔄 Starting queue worker for campaign {campaign_id}")
+        
+        node = next(n for n in asterisk_config.nodes if n.id == node_id), None
+        if not node:
+            logger.error(f"❌ Node {node_id} not found")
+            return
+        
+        max_iterations = 1000  # Защита от бесконечного цикла
+        iteration = 0
+        
+        while iteration < max_iterations:
+            iteration += 1
+            
+            # Проверяем очередь
+            queue_key = f"voice:queue:{campaign_id}"
+            queue_len = await redis_client.llen(queue_key)
+            
+            if queue_len == 0:
+                logger.info(f"✅ Queue empty for campaign {campaign_id}")
+                break
+            
+            # Получаем доступные слоты
+            available_slots = await self._get_available_slots(node, redis_client)
+            total_available = sum(available_slots.values())
+            
+            if total_available == 0:
+                # Ждем освобождения слотов
+                await asyncio.sleep(2)
+                continue
+            
+            # Берем номер из очереди (round-robin по транкам)
+            sub_data = await redis_client.rpop(queue_key)
+            if not sub_data:
+                break
+            
+            try:
+                sub_dict = json.loads(sub_data)
+                subscriber = Subscriber(**sub_dict)
+            except Exception as e:
+                logger.error(f"❌ Failed to parse subscriber data: {e}")
+                continue
+            
+            # Выбираем транк с наименьшей загрузкой
+            selected_trunk = min(available_slots.keys(), key=lambda t: available_slots[t])
+            
+            # Пытаемся позвонить
+            result = await self.originate_call(
+                node_id=node_id,
+                subscriber=subscriber,
+                audio_file=audio_file,
+                initiator=initiator,
+                redis_client=redis_client,
+                campaign_id=campaign_id,
+                retry_count=sub_dict.get("retry_count", 0)
+            )
+            
+            # Обрабатываем retry
+            if result["status"] == "error" and result.get("retryable"):
+                retry_count = result.get("retry_count", 0)
+                if retry_count < MAX_RETRIES:
+                    sub_dict["retry_count"] = retry_count + 1
+                    retry_queue_key = f"voice:retry:{campaign_id}"
+                    await redis_client.lpush(retry_queue_key, json.dumps(sub_dict))
+                    logger.info(f"🔄 Queued retry for {subscriber.display_name} (attempt {retry_count + 1}/{MAX_RETRIES})")
+                else:
+                    logger.error(f"❌ Max retries reached for {subscriber.display_name}")
+            
+            # Небольшая задержка между звонками
+            await asyncio.sleep(0.5)
+        
+        # Обрабатываем retry-очередь
+        retry_queue_key = f"voice:retry:{campaign_id}"
+        retry_len = await redis_client.llen(retry_queue_key)
+        
+        if retry_len > 0:
+            logger.info(f"⏳ Waiting {RETRY_DELAY}s before processing {retry_len} retries")
+            await asyncio.sleep(RETRY_DELAY)
+            
+            # Перемещаем retry в основную очередь
+            while True:
+                retry_data = await redis_client.rpop(retry_queue_key)
+                if not retry_data:
+                    break
+                await redis_client.lpush(queue_key, retry_data)
+            
+            # Перезапускаем worker
+            asyncio.create_task(self._campaign_queue_worker(
+                campaign_id, node_id, audio_file, initiator, redis_client
+            ))
+        
+        logger.info(f"✅ Queue worker finished for campaign {campaign_id}")
+    
     async def originate_campaign(
         self,
         node_id: str,
@@ -333,12 +335,23 @@ class AsteriskManagerService:
         audio_file: str,
         initiator: str = "Voice API",
         target_exten: str = "unknown",
-        redis_client: redis.Redis = None, 
+        redis_client: redis.Redis = None,
         campaign_id: str = None
     ) -> dict:
         """Запустить кампанию обзвона МАКСИМАЛЬНО ПАРАЛЛЕЛЬНО"""
         
-        # 🔥 Создаем задачи для всех абонентов
+        # 🔥 ПРАВИЛЬНОЕ получение объекта node
+        node = None
+        for n in asterisk_config.nodes:
+            if n.id == node_id:
+                node = n
+                break
+        
+        if not node:
+            logger.error(f"❌ Node '{node_id}' not found in config")
+            return {"status": "error", "error": f"Node '{node_id}' not found"}
+        
+        # Создаем задачи для всех абонентов
         tasks = []
         for subscriber in subscribers:
             task = asyncio.create_task(
@@ -354,7 +367,7 @@ class AsteriskManagerService:
             )
             tasks.append(task)
         
-        # 🔥 Ждём завершения всех задач (но они уже запущены параллельно)
+        # Ждём завершения всех задач
         results_list = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Собираем статистику
@@ -374,8 +387,22 @@ class AsteriskManagerService:
             f"📊 Campaign finished: {results['success']} success, "
             f"{results['error']} errors out of {len(subscribers)} subscribers"
         )
-        
         return results
+    
+    async def get_campaign_status(self, campaign_id: str, redis_client: redis.Redis) -> dict:
+        """Получить статус кампании"""
+        queue_key = f"voice:queue:{campaign_id}"
+        retry_key = f"voice:retry:{campaign_id}"
+        
+        queue_len = await redis_client.llen(queue_key)
+        retry_len = await redis_client.llen(retry_key)
+        
+        return {
+            "campaign_id": campaign_id,
+            "queued": queue_len,
+            "retrying": retry_len,
+            "worker_active": campaign_id in self.active_workers
+        }
 
 # Глобальный инстанс
 asterisk_manager = AsteriskManagerService()

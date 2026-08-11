@@ -1,0 +1,38 @@
+{
+  "fire_alarm": {
+    "name": "Пожарная тревога",
+    "audio_file": "custom/test-message-8000",
+    "severity": "alarm",
+    "default_text": "🚨 ВНИМАНИЕ! Пожарная тревога. Немедленно покиньте здание согласно плану эвакуации."
+  },
+  "gas_leak": {
+    "name": "Утечка газа",
+    "audio_file": "gas_leak.wav",
+    "severity": "alarm",
+    "default_text": "⚠️ ЗАФИКСИРОВАНА УТЕЧКА ГАЗА. Эвакуация персонала. Не используйте открытый огонь."
+  },
+  "power_outage": {
+    "name": "Отключение питания",
+    "audio_file": "power_outage.wav",
+    "severity": "attention",
+    "default_text": "⚡ Отключение электроснабжения. Переход на резервное питание."
+  },
+  "security_breach": {
+    "name": "Нарушение безопасности",
+    "audio_file": "security_breach.wav",
+    "severity": "alarm",
+    "default_text": "🔒 Нарушение периметра безопасности. Всем сотрудникам оставаться на местах."
+  },
+  "evacuation": {
+    "name": "Общая эвакуация",
+    "audio_file": "evacuation.wav",
+    "severity": "alarm",
+    "default_text": "🚨 ОБЩАЯ ЭВАКУАЦИЯ. Немедленно покиньте здание."
+  },
+  "drill_bpla": {
+    "name": "Учебная тревога. БПЛА",
+    "audio_file": "custom/test-message-8000",
+    "severity": "attention",
+    "default_text": "📋 Учебная тревога. Это тренировка. Отработка действий при угрозе воздействия БПЛА."
+  }
+}

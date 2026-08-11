@@ -18,20 +18,57 @@
             font-weight: 300; 
             letter-spacing: 2px; 
         }
+        
+        /* Навигация */
+        .tabs { 
+            display: flex; 
+            gap: 10px; 
+            margin-bottom: 30px; 
+            max-width: 1400px; 
+            margin-left: auto; 
+            margin-right: auto;
+        }
+        .tab { 
+            padding: 12px 24px; 
+            background: #1a1d24; 
+            border: 2px solid transparent; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-weight: 600; 
+            transition: all 0.2s; 
+        }
+        .tab:hover { 
+            background: #252830; 
+        }
+        .tab.active { 
+            border-color: #339af0; 
+            background: #1e2530; 
+        }
+        
+        /* Контент */
+        .content { 
+            display: none; 
+            max-width: 1400px; 
+            margin: 0 auto; 
+        }
+        .content.active { 
+            display: block; 
+        }
+        
+        /* Карточки локаций */
         .grid { 
             display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); 
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); 
             gap: 20px; 
-            max-width: 1600px; 
-            margin: 0 auto; 
         }
         .card {
             background: #1a1d24; 
             border-radius: 16px; 
             padding: 20px;
-            border: 3px solid #2f9e44; 
+            border: 3px solid transparent; 
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
+        .card.mode-normal { border-color: #2f9e44; }
         .card.mode-attention { border-color: #f08c00; }
         .card.mode-alarm { border-color: #e03131; }
         .header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
@@ -39,7 +76,7 @@
         .name { font-size: 20px; font-weight: 700; }
         .status-text { font-size: 13px; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
         
-        /* Заголовки секций */
+        /* Сценарии */
         .section-title { 
             font-size: 11px; 
             opacity: 0.6; 
@@ -49,8 +86,6 @@
             padding-bottom: 4px;
             border-bottom: 1px solid #2c3440;
         }
-        
-        /* Сценарии оповещения */
         .alert-item {
             background: rgba(0,0,0,0.3); 
             border-radius: 8px; 
@@ -79,15 +114,33 @@
         .launch-btn.severity-alarm { background: #e03131; }
         .launch-btn.severity-attention { background: #f08c00; }
         
-        /* Список абонентов */
-        .subscribers-box {
-            background: rgba(51, 154, 240, 0.1);
-            border: 1px solid rgba(51, 154, 240, 0.3);
-            border-radius: 8px;
-            padding: 10px 12px;
-            margin-bottom: 12px;
+        /* Скрытый список абонентов */
+        .btn-toggle-subs {
+            width: 100%;
+            background: rgba(51, 154, 240, 0.15);
+            border: 1px solid rgba(51, 154, 240, 0.4);
+            color: #74c0fc;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: left;
+            margin-bottom: 8px;
+            transition: all 0.2s;
         }
-        .subscribers-title { font-size: 11px; opacity: 0.7; text-transform: uppercase; margin-bottom: 6px; }
+        .btn-toggle-subs:hover {
+            background: rgba(51, 154, 240, 0.25);
+            color: #a5d8ff;
+        }
+        .subscribers-box {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            display: none;
+        }
         .subscribers-list { font-size: 12px; line-height: 1.6; }
         .subscriber-item { display: flex; justify-content: space-between; padding: 2px 0; }
         .subscriber-number { font-family: monospace; opacity: 0.9; }
@@ -136,41 +189,184 @@
         .btn-al { background: #e03131; color: white; }
         .btn-clear { background: #495057; color: white; }
         .btn-history { background: #339af0; color: white; }
-
-        .btn-toggle-subs {
-            width: 100%;
-            background: rgba(51, 154, 240, 0.15);
-            border: 1px solid rgba(51, 154, 240, 0.4);
-            color: #74c0fc;
-            padding: 8px 12px;
-            border-radius: 6px;
+        
+        /* Массовое оповещение */
+        .bulk-container {
+            background: #1a1d24;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .bulk-step { margin-bottom: 30px; }
+        .bulk-step h3 { 
+            font-size: 14px; 
+            text-transform: uppercase; 
+            opacity: 0.7; 
+            margin-bottom: 16px; 
+        }
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        .template-card {
+            background: rgba(0,0,0,0.3);
+            border: 2px solid #2c3440;
+            border-radius: 8px;
+            padding: 16px;
             cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
-            text-align: left;
-            margin-bottom: 8px;
             transition: all 0.2s;
         }
-        .btn-toggle-subs:hover {
-            background: rgba(51, 154, 240, 0.25);
-            color: #a5d8ff;
+        .template-card:hover {
+            border-color: #339af0;
+            transform: translateY(-2px);
         }
-        .subscribers-box {
-            background: rgba(0,0,0,0.2);
-            border: 1px solid rgba(255,255,255,0.05);
+        .template-card.selected {
+            border-color: #339af0;
+            background: rgba(51, 154, 240, 0.1);
+        }
+        .template-card.severity-alarm.selected {
+            border-color: #e03131;
+            background: rgba(224, 49, 49, 0.1);
+        }
+        .template-card.severity-attention.selected {
+            border-color: #f08c00;
+            background: rgba(240, 140, 0, 0.1);
+        }
+        .loc-checkbox {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
             border-radius: 6px;
-            padding: 8px 12px;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+        .loc-checkbox input { margin-right: 12px; }
+        .loc-checkbox label { flex: 1; cursor: pointer; }
+        .loc-count { opacity: 0.6; font-size: 12px; }
+        .bulk-summary {
+            background: rgba(51, 154, 240, 0.1);
+            border: 1px solid rgba(51, 154, 240, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .bulk-launch-btn {
+            width: 100%;
+            padding: 16px;
+            background: #e03131;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .bulk-launch-btn:hover {
+            background: #c92a2a;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(224, 49, 49, 0.4);
+        }
+        .bulk-launch-btn:disabled {
+            background: #495057;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .history-table th,
+        .history-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #2c3440;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        .history-table th {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.6;
+        }
+
+        .history-table code {
+            font-family: monospace;
+            background: rgba(255,255,255,0.08);
+            padding: 2px 6px;
+            border-radius: 4px;
         }
     </style>
 </head>
 <body>
     <h1>📡 ДИСПЕТЧЕРСКИЙ ПУЛЬТ</h1>
-    <div id="grid" class="grid">Загрузка...</div>
-        <script>
+    
+    <!-- Навигация -->
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('locations')">📍 Локации</div>
+        <div class="tab" onclick="switchTab('alerts')">📢 Оповещения</div>
+        <div class="tab" onclick="switchTab('history')">📜 История</div>
+    </div>
+    
+    <!-- Раздел 1: Локации -->
+    <div id="locations" class="content active">
+        <div id="locations-grid" class="grid">Загрузка...</div>
+    </div>
+    
+    <!-- Раздел 2: Массовые оповещения -->
+    <div id="alerts" class="content">
+        <div class="bulk-container">
+            <div class="bulk-step">
+                <h3>1. Выберите сценарий оповещения</h3>
+                <div id="templates-grid" class="template-grid">Загрузка...</div>
+            </div>
+            
+            <div class="bulk-step">
+                <h3>2. Выберите локации</h3>
+                <div style="margin-bottom: 12px;">
+                    <label style="cursor: pointer; opacity: 0.8;">
+                        <input type="checkbox" id="selectAllLocs" onchange="toggleAllLocations()">
+                        Выбрать все
+                    </label>
+                </div>
+                <div id="locations-list">Загрузка...</div>
+            </div>
+            
+            <div class="bulk-step">
+                <div class="bulk-summary">
+                    <strong>Итого:</strong> <span id="summaryCount">0</span> локаций
+                </div>
+                <button id="bulkLaunchBtn" class="bulk-launch-btn" onclick="launchBulkAlert()" disabled>
+                     ЗАПУСТИТЬ ОПОВЕЩЕНИЕ
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Раздел 3: История -->
+    <div id="history" class="content">
+        <div id="campaigns-list" style="background: #1a1d24; border-radius: 16px; padding: 30px; max-width: 1000px; margin: 0 auto;">
+            Загрузка...
+        </div>
+    </div>
+
+    <script>
         const DASHBOARD_TOKEN = "{{ dashboard_token }}";
         const API_BASE = window.location.pathname.startsWith('/incident-dashboard/') ? '/incident-dashboard/api' : '/api';
         let userToken = sessionStorage.getItem('matrix_dashboard_token');
+        
+        // Глобальные переменные для массового оповещения
+        let selectedTemplate = null;
+        let selectedLocations = new Set();
+        let allLocations = [];
+        let allTemplates = [];
         
         async function apiRequest(url, method, body = null) {
             const headers = { 'Content-Type': 'application/json' };
@@ -195,29 +391,262 @@
             return await res.json();
         }
         
-        // 🔥 НОВАЯ ФУНКЦИЯ: Переключение видимости списка
-        function toggleSubs(locId) {
-            const el = document.getElementById('subs-' + locId);
-            const btn = document.getElementById('btn-subs-' + locId);
-            if (el.style.display === 'none') {
-                el.style.display = 'block';
-                btn.innerHTML = btn.innerHTML.replace('▼', '▲');
-            } else {
-                el.style.display = 'none';
-                btn.innerHTML = btn.innerHTML.replace('▲', '▼');
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+            
+            if (tabName === 'locations') updateDashboard();
+            if (tabName === 'alerts') loadBulkAlertData();
+            if (tabName === 'history') loadHistory();
+        }
+        
+        
+        // =============================================================================
+        // МАССОВОЕ ОПОВЕЩЕНИЕ: чистая рабочая версия
+        // =============================================================================
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            return String(text)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function formatTimestamp(ts) {
+            if (!ts) return "—";
+
+            try {
+                return new Date(ts).toLocaleString("ru-RU", {
+                    timeZone: "Asia/Novosibirsk",
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit"
+                });
+            } catch (e) {
+                return new Date(ts).toLocaleString("ru-RU");
             }
         }
 
+        async function loadBulkAlertData() {
+            try {
+                const [tplRes, locRes] = await Promise.all([
+                    apiRequest('v1/templates', 'GET'),
+                    apiRequest('v1/locations', 'GET')
+                ]);
+
+                allTemplates = tplRes.templates || [];
+                allLocations = locRes.locations || [];
+
+                renderTemplates();
+                await renderLocationList();
+                updateSummary();
+            } catch (e) {
+                console.error(e);
+                document.getElementById('templates-grid').innerHTML =
+                    `<div style="color:#e03131;">Ошибка: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        function renderTemplates() {
+            const grid = document.getElementById('templates-grid');
+            grid.innerHTML = '';
+
+            allTemplates.forEach(tpl => {
+                const text = tpl.default_text || tpl.text_for_matrix || '';
+                const severity = tpl.severity || 'attention';
+
+                const card = document.createElement('div');
+                card.className = `template-card severity-${severity}`;
+                if (selectedTemplate === tpl.id) {
+                    card.classList.add('selected');
+                }
+
+                card.onclick = (e) => selectTemplate(tpl.id, e.currentTarget);
+
+                card.innerHTML = `
+                    <div style="font-weight: 700; margin-bottom: 8px;">
+                        ${escapeHtml(tpl.name)}
+                    </div>
+                    <div style="font-size: 12px; opacity: 0.8; line-height: 1.4; max-height: 60px; overflow: hidden;">
+                        ${escapeHtml(text.substring(0, 120))}${text.length > 120 ? '...' : ''}
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        function selectTemplate(templateId, element) {
+            selectedTemplate = templateId;
+
+            document.querySelectorAll('.template-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+
+            if (element) {
+                element.classList.add('selected');
+            }
+
+            renderLocationList();
+            updateSummary();
+        }
+
+        async function renderLocationList() {
+            const list = document.getElementById('locations-list');
+            list.innerHTML = '';
+
+            allLocations.forEach(loc => {
+                const div = document.createElement('div');
+                div.className = 'loc-checkbox';
+
+                div.innerHTML = `
+                    <input type="checkbox"
+                        id="loc-${loc.id}"
+                        value="${loc.id}"
+                        ${selectedLocations.has(loc.id) ? 'checked' : ''}
+                        onchange="toggleLocation('${loc.id}')">
+                    <label for="loc-${loc.id}">
+                        ${loc.icon || '📍'} ${escapeHtml(loc.name)}
+                    </label>
+                    <span class="loc-count" id="loc-count-${loc.id}">загрузка...</span>
+                `;
+
+                list.appendChild(div);
+            });
+
+            // Запрашиваем количество абонентов с бэка
+            await Promise.all(allLocations.map(async loc => {
+                let count = 0;
+
+                try {
+                    let url = `location/${loc.id}/subscribers`;
+
+                    if (selectedTemplate) {
+                        url += `?template_id=${encodeURIComponent(selectedTemplate)}`;
+                    }
+
+                    const data = await apiRequest(url, 'GET');
+                    count = data.total_count || 0;
+                } catch (e) {
+                    console.error(`Failed to load subscribers for ${loc.id}:`, e);
+                    count = 0;
+                }
+
+                const countEl = document.getElementById(`loc-count-${loc.id}`);
+                if (countEl) {
+                    countEl.textContent = `${count} абонентов`;
+                }
+            }));
+
+            const selectAll = document.getElementById('selectAllLocs');
+            if (selectAll) {
+                selectAll.checked = allLocations.length > 0 && selectedLocations.size === allLocations.length;
+            }
+        }
+
+        function toggleAllLocations() {
+            const checkbox = document.getElementById('selectAllLocs');
+            const checked = checkbox.checked;
+
+            selectedLocations = checked
+                ? new Set(allLocations.map(loc => loc.id))
+                : new Set();
+
+            allLocations.forEach(loc => {
+                const el = document.getElementById(`loc-${loc.id}`);
+                if (el) el.checked = checked;
+            });
+
+            updateSummary();
+        }
+
+        function toggleLocation(locId) {
+            if (selectedLocations.has(locId)) {
+                selectedLocations.delete(locId);
+            } else {
+                selectedLocations.add(locId);
+            }
+
+            updateSummary();
+        }
+
+        function updateSummary() {
+            const count = selectedLocations.size;
+
+            document.getElementById('summaryCount').textContent = count;
+
+            const btn = document.getElementById('bulkLaunchBtn');
+
+            if (!selectedTemplate || count === 0) {
+                btn.disabled = true;
+                btn.textContent = 'ЗАПУСТИТЬ ОПОВЕЩЕНИЕ';
+            } else {
+                btn.disabled = false;
+                btn.textContent = `🚀 ЗАПУСТИТЬ ОПОВЕЩЕНИЕ (${count} локаций)`;
+            }
+        }
+
+        async function launchBulkAlert() {
+            if (!selectedTemplate || selectedLocations.size === 0) return;
+
+            const tpl = allTemplates.find(t => t.id === selectedTemplate);
+            const templateName = tpl?.name || selectedTemplate;
+
+            const confirmed = confirm(
+                `⚠️ Вы уверены, что хотите запустить "${templateName}" на ${selectedLocations.size} локациях?\n\nЭто действие нельзя отменить!`
+            );
+
+            if (!confirmed) return;
+
+            const btn = document.getElementById('bulkLaunchBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Запуск...';
+
+            try {
+                const result = await apiRequest('v1/alert/trigger-bulk', 'POST', {
+                    template_id: selectedTemplate,
+                    loc_ids: Array.from(selectedLocations)
+                });
+
+                alert(
+                    `✅ Массовое оповещение запущено!\n\nУспешно: ${result.success.length}\nНе удалось: ${result.failed.length}`
+                );
+
+                // Сброс состояния
+                selectedTemplate = null;
+                selectedLocations.clear();
+
+                renderTemplates();
+                await renderLocationList();
+                updateSummary();
+            } catch (e) {
+                alert(`❌ Ошибка: ${e.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 ЗАПУСТИТЬ ОПОВЕЩЕНИЕ';
+            }
+        }
+
+        
+        // 🔥 Обновление дашборда (локации)
         async function updateDashboard() {
             try {
                 const data = await apiRequest('dashboard', 'GET');
-                const grid = document.getElementById('grid');
+                const grid = document.getElementById('locations-grid');
                 grid.innerHTML = '';
                 
                 for (const [id, loc] of Object.entries(data)) {
                     const statusMap = { normal: 'НОРМА', attention: 'ВНИМАНИЕ', alarm: 'ТРЕВОГА' };
                     
-                    // 1. Рендер сценариев
+                    // Рендер сценариев
                     let alertsHtml = '';
                     if (loc.alerts && loc.alerts.length > 0) {
                         alertsHtml = '<div class="section-title">📢 Сценарии оповещения</div>';
@@ -239,7 +668,7 @@
                         });
                     }
                     
-                    // 2. 🔥 Рендер скрываемого списка абонентов
+                    // Рендер скрываемого списка абонентов
                     let subsHtml = '';
                     let subCount = 0;
                     if (loc.alerts && loc.alerts.length > 0) {
@@ -260,7 +689,6 @@
                                 subsListHtml += `<div class="subscriber-item"><span class="subscriber-number">${number}</span><span class="subscriber-desc">${desc}</span></div>`;
                             });
                             
-                            // 🔥 Кнопка-переключатель и скрытый блок
                             subsHtml = `
                                 <button id="btn-subs-${id}" class="btn-toggle-subs" onclick="toggleSubs('${id}')">
                                     👥 Список оповещения (${subCount}) ▼
@@ -272,7 +700,7 @@
                         }
                     }
                     
-                    // 3. Рендер событий
+                    // Рендер событий
                     let eventsHtml = '';
                     if (loc.events && loc.events.length > 0) {
                         eventsHtml = '<div class="section-title">🔔 Активные события</div><div class="events-list">';
@@ -314,7 +742,19 @@
                 }
             } catch (e) {
                 console.error(e);
-                document.getElementById('grid').innerHTML = `<div style="text-align: center; padding: 60px;">Ошибка: ${e.message}</div>`;
+                document.getElementById('locations-grid').innerHTML = `<div style="text-align: center; padding: 60px;">Ошибка: ${e.message}</div>`;
+            }
+        }
+        
+        function toggleSubs(locId) {
+            const el = document.getElementById('subs-' + locId);
+            const btn = document.getElementById('btn-subs-' + locId);
+            if (el.style.display === 'none' || !el.style.display) {
+                el.style.display = 'block';
+                btn.innerHTML = btn.innerHTML.replace('▼', '▲');
+            } else {
+                el.style.display = 'none';
+                btn.innerHTML = btn.innerHTML.replace('▲', '▼');
             }
         }
         
@@ -368,35 +808,358 @@
         
         async function showHistory(locId) {
             try {
-                const data = await apiRequest(`location/${locId}/history`, 'GET');
+                const data = await apiRequest(`v1/history?loc_id=${locId}&limit=100`, 'GET');
+
                 const modal = document.createElement('div');
-                modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-                let html = '<div style="background:#1a1d24;padding:30px;border-radius:16px;max-width:600px;width:100%;max-height:80vh;overflow-y:auto;">';
-                html += `<h2 style="color:#e1e7ef;margin-top:0;">📜 История: ${data.loc_name}</h2>`;
-                if (data.events.length === 0) {
-                    html += '<p style="opacity:0.6;">Нет событий за последние 48 часов</p>';
+                modal.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0,0,0,0.85);
+                    z-index: 9999;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                `;
+
+                let html = `
+                    <div style="
+                        background: #1a1d24;
+                        padding: 30px;
+                        border-radius: 16px;
+                        max-width: 900px;
+                        width: 100%;
+                        max-height: 80vh;
+                        overflow-y: auto;
+                    ">
+                        <h2 style="color: #e1e7ef; margin-top: 0;">
+                            📜 История локации
+                        </h2>
+                `;
+
+                const items = data.history || [];
+
+                if (!items.length) {
+                    html += '<p style="opacity: 0.6;">История пока пуста</p>';
                 } else {
-                    data.events.forEach(ev => {
-                        const icon = ev.type === 'alarm' ? '🚨' : '⚠️';
-                        const created = new Date(ev.timestamp).toLocaleString('ru-RU');
-                        const closed = ev.closed_at ? new Date(ev.closed_at).toLocaleString('ru-RU') : '—';
-                        const reason = ev.close_reason === 'auto' ? '🤖 Авто' : '🖐 Вручную';
-                        html += `<div style="background:rgba(255,255,255,0.05);padding:12px;border-radius:8px;margin-bottom:8px;border-left:4px solid ${ev.type === 'alarm' ? '#e03131' : '#f08c00'};">
-                            <div style="font-weight:600;margin-bottom:4px;">${icon} ${ev.type.toUpperCase()}</div>
-                            <div style="font-size:14px;opacity:0.9;">${ev.comment || 'Без комментария'}</div>
-                            <div style="font-size:12px;opacity:0.6;margin-top:4px;">Создано: ${created} • Закрыто: ${closed} • ${reason}</div>
-                            <div style="font-size:12px;opacity:0.6;">Инициатор: ${ev.source}</div>
-                        </div>`;
+                    html += `
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left; padding: 8px;">Время</th>
+                                    <th style="text-align: left; padding: 8px;">Тип</th>
+                                    <th style="text-align: left; padding: 8px;">Описание</th>
+                                    <th style="text-align: left; padding: 8px;">Источник</th>
+                                    <th style="text-align: left; padding: 8px;">Campaign ID</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+
+                    items.forEach(item => {
+                        let typeLabel = "";
+
+                        if (item.category === "campaign") {
+                            typeLabel = "📞 Обзвон";
+                        } else if (item.severity === "alarm") {
+                            typeLabel = "🚨 Тревога";
+                        } else if (item.severity === "attention") {
+                            typeLabel = "⚠️ Внимание";
+                        } else if (item.action === "closed" || item.action === "auto_closed") {
+                            typeLabel = "✅ Закрыто";
+                        } else if (item.action === "cleared") {
+                            typeLabel = "🧹 Очистка";
+                        } else {
+                            typeLabel = "ℹ️ Событие";
+                        }
+
+                        html += `
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #2c3440;">
+                                    ${item.ts_local || ""}
+                                </td>
+                                <td style="padding: 8px; border-bottom: 1px solid #2c3440;">
+                                    ${typeLabel}
+                                </td>
+                                <td style="padding: 8px; border-bottom: 1px solid #2c3440;">
+                                    <strong>${item.title || ""}</strong><br>
+                                    <span style="opacity: 0.75;">${item.description || ""}</span>
+                                </td>
+                                <td style="padding: 8px; border-bottom: 1px solid #2c3440;">
+                                    ${item.source || ""}
+                                </td>
+                                <td style="padding: 8px; border-bottom: 1px solid #2c3440;">
+                                    ${item.campaign_id ? item.campaign_id.substring(0, 8) : "—"}
+                                </td>
+                            </tr>
+                        `;
                     });
+
+                    html += `
+                            </tbody>
+                        </table>
+                    `;
                 }
-                html += '<div style="margin-top:20px;"><button onclick="this.closest(\'div[style*="position:fixed"]\').remove()" style="background:#495057;color:white;border:none;padding:12px 24px;border-radius:8px;font-weight:600;cursor:pointer;">Закрыть</button></div>';
-                html += '</div>';
+
+                html += `
+                        <div style="margin-top: 20px; text-align: right;">
+                            <button onclick="this.closest('div[style*=fixed]').remove()" style="
+                                background: #339af0;
+                                color: white;
+                                border: none;
+                                padding: 12px 24px;
+                                border-radius: 8px;
+                                font-weight: 600;
+                                cursor: pointer;
+                            ">
+                                Закрыть
+                            </button>
+                        </div>
+                    </div>
+                `;
+
                 modal.innerHTML = html;
-                modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+                modal.onclick = (e) => {
+                    if (e.target === modal) modal.remove();
+                };
+
                 document.body.appendChild(modal);
-            } catch (e) { alert('Ошибка: ' + e.message); }
+
+            } catch (e) {
+                alert("Ошибка: " + e.message);
+            }
         }
         
+        async function loadHistory() {
+            const container = document.getElementById('campaigns-list');
+            container.innerHTML = 'Загрузка...';
+
+            try {
+                const data = await apiRequest('v1/alerts/history?limit=100', 'GET');
+                const items = data.history || [];
+
+                if (!items.length) {
+                    container.innerHTML = `
+                        <div style="text-align: center; opacity: 0.6; padding: 40px;">
+                            История оповещений пока пуста
+                        </div>
+                    `;
+                    return;
+                }
+
+                const rows = items.map(item => {
+                    const campaignId = item.campaign_id || "";
+                    const campaignShort = campaignId ? campaignId.substring(0, 8) : "—";
+
+                    return `
+                        <tr>
+                            <td>${escapeHtml(item.started_at_local || formatTimestamp(item.started_at_utc))}</td>
+                            <td>${escapeHtml(item.loc_name || item.loc_id || "")}</td>
+                            <td>${escapeHtml(item.template_name || item.template_id || "")}</td>
+                            <td>
+                                <code title="${escapeHtml(campaignId)}">${campaignShort}</code>
+                            </td>
+                            <td>${item.subscribers_count ?? 0}</td>
+                            <td>${escapeHtml(item.source || "")}</td>
+                            <td>
+                                <button class="launch-btn" onclick="showCampaignDetails('${campaignId}')">
+                                    Детали
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join("");
+
+                container.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="font-weight: 600;">История оповещений</h3>
+                        <button class="btn btn-history" onclick="loadHistory()">🔄 Обновить</button>
+                    </div>
+
+                    <div style="overflow-x: auto;">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Время UTC+7</th>
+                                    <th>Локация</th>
+                                    <th>Сценарий</th>
+                                    <th>Campaign ID</th>
+                                    <th>Абонентов</th>
+                                    <th>Источник</th>
+                                    <th>Детали</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+            } catch (e) {
+                console.error(e);
+                container.innerHTML = `
+                    <div style="color: #e03131; padding: 20px;">
+                        Ошибка: ${escapeHtml(e.message)}
+                    </div>
+                `;
+            }
+        }
+
+
+        async function showCampaignDetails(campaignId) {
+            const overlayId = `campaign-modal-${campaignId}`;
+
+            const overlay = document.createElement('div');
+            overlay.id = overlayId;
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.85);
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            `;
+
+            overlay.innerHTML = `
+                <div style="background: #1a1d24; padding: 30px; border-radius: 16px; max-width: 900px; width: 100%;">
+                    Загрузка деталей кампании...
+                </div>
+            `;
+
+            overlay.onclick = (e) => {
+                if (e.target === overlay) {
+                    overlay.remove();
+                }
+            };
+
+            document.body.appendChild(overlay);
+
+            try {
+                const data = await apiRequest(`v1/campaign/${campaignId}/details`, 'GET');
+                const events = data.events || [];
+
+                let rows = "";
+
+                if (!events.length) {
+                    rows = `
+                        <tr>
+                            <td colspan="4" style="opacity: 0.6;">
+                                Нет событий по этой кампании
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    rows = events.map(ev => {
+                        const eventType = ev.event || "unknown";
+
+                        let info = "";
+
+                        if (eventType === "start_campaign") {
+                            info = `
+                                ${escapeHtml(ev.loc_name || "")}
+                                ${ev.template_id ? ` / ${escapeHtml(ev.template_id)}` : ""}
+                                ${typeof ev.total_subscribers !== "undefined" ? ` / абонентов: ${ev.total_subscribers}` : ""}
+                            `;
+                        } else {
+                            info = ev.number ? escapeHtml(ev.number) : "";
+                        }
+
+                        return `
+                            <tr>
+                                <td>${formatTimestamp(ev.timestamp)}</td>
+                                <td>${escapeHtml(eventType)}</td>
+                                <td>${info}</td>
+                                <td>${escapeHtml(ev.status || "")}</td>
+                            </tr>
+                        `;
+                    }).join("");
+                }
+
+                overlay.innerHTML = `
+                    <div style="
+                        background: #1a1d24;
+                        padding: 30px;
+                        border-radius: 16px;
+                        max-width: 900px;
+                        width: 100%;
+                        max-height: 85vh;
+                        overflow-y: auto;
+                    ">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="font-weight: 600;">Детали кампании</h3>
+                            <button onclick="document.getElementById('${overlayId}').remove()" style="
+                                background: #495057;
+                                color: white;
+                                border: none;
+                                padding: 8px 14px;
+                                border-radius: 6px;
+                                cursor: pointer;
+                            ">✕</button>
+                        </div>
+
+                        <div style="margin-bottom: 16px; font-size: 13px; opacity: 0.8;">
+                            Campaign ID: <code>${escapeHtml(campaignId)}</code>
+                        </div>
+
+                        <div style="overflow-x: auto;">
+                            <table class="history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Время UTC+7</th>
+                                        <th>Событие</th>
+                                        <th>Информация</th>
+                                        <th>Статус</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rows}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div style="margin-top: 20px; text-align: right;">
+                            <button onclick="document.getElementById('${overlayId}').remove()" style="
+                                background: #339af0;
+                                color: white;
+                                border: none;
+                                padding: 10px 18px;
+                                border-radius: 6px;
+                                cursor: pointer;
+                            ">Закрыть</button>
+                        </div>
+                    </div>
+                `;
+
+            } catch (e) {
+                console.error(e);
+
+                overlay.innerHTML = `
+                    <div style="
+                        background: #1a1d24;
+                        padding: 30px;
+                        border-radius: 16px;
+                        max-width: 600px;
+                        width: 100%;
+                        color: #e03131;
+                    ">
+                        Ошибка загрузки деталей кампании:<br><br>
+                        ${escapeHtml(e.message)}
+                    </div>
+                `;
+            }
+        }
+        
+        // Инициализация
         updateDashboard();
         setInterval(updateDashboard, 5000);
     </script>

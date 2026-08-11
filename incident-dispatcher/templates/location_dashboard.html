@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Пульт: {{ loc_name }}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0f1115;
+            color: #e1e7ef;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: #1a1d24;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            background: #252830;
+        }
+
+        .tab.active {
+            border-color: #339af0;
+            background: #1e2530;
+        }
+
+        .content {
+            display: none;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .content.active {
+            display: block;
+        }
+
+        .card {
+            background: #1a1d24;
+            border-radius: 16px;
+            padding: 24px;
+            border: 3px solid transparent;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .card.mode-normal { border-color: #2f9e44; }
+        .card.mode-attention { border-color: #f08c00; }
+        .card.mode-alarm { border-color: #e03131; }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 14px;
+        }
+
+        .icon {
+            font-size: 48px;
+        }
+
+        .name {
+            font-size: 28px;
+            font-weight: 800;
+        }
+
+        .status-text {
+            font-size: 14px;
+            opacity: 0.85;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 18px;
+        }
+
+        .section-title {
+            font-size: 11px;
+            opacity: 0.6;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 18px 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #2c3440;
+        }
+
+        .alert-item {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-left: 4px solid #495057;
+        }
+
+        .alert-item.severity-alarm { border-left-color: #e03131; }
+        .alert-item.severity-attention { border-left-color: #f08c00; }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            gap: 10px;
+        }
+
+        .alert-name {
+            font-weight: 700;
+        }
+
+        .alert-code {
+            font-size: 10px;
+            opacity: 0.7;
+            font-family: monospace;
+            background: rgba(255,255,255,0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .alert-text {
+            font-size: 13px;
+            opacity: 0.85;
+            margin-bottom: 10px;
+            line-height: 1.45;
+        }
+
+        .launch-btn {
+            background: #339af0;
+            border: none;
+            color: white;
+            padding: 7px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .launch-btn.severity-alarm { background: #e03131; }
+        .launch-btn.severity-attention { background: #f08c00; }
+
+        .btn-toggle-subs {
+            width: 100%;
+            background: rgba(51, 154, 240, 0.15);
+            border: 1px solid rgba(51, 154, 240, 0.4);
+            color: #74c0fc;
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 700;
+            text-align: left;
+            margin-bottom: 10px;
+        }
+
+        .subscribers-box {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 14px;
+            display: none;
+        }
+
+        .subscriber-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 3px 0;
+            font-size: 13px;
+        }
+
+        .subscriber-number {
+            font-family: monospace;
+        }
+
+        .subscriber-desc {
+            opacity: 0.7;
+            font-size: 12px;
+            text-align: right;
+        }
+
+        .events-list {
+            max-height: 220px;
+            overflow-y: auto;
+            margin-bottom: 14px;
+        }
+
+        .event-item {
+            background: rgba(0,0,0,0.3);
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-left: 3px solid;
+            font-size: 13px;
+        }
+
+        .event-item.attention { border-left-color: #f08c00; }
+        .event-item.alarm { border-left-color: #e03131; }
+
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .event-comment {
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .event-meta {
+            font-size: 11px;
+            opacity: 0.65;
+        }
+
+        .event-close {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: white;
+            padding: 2px 7px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 18px;
+        }
+
+        .btn {
+            padding: 11px 14px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: 13px;
+            flex: 1;
+            min-width: 90px;
+            color: white;
+        }
+
+        .btn-a { background: #f08c00; }
+        .btn-al { background: #e03131; }
+        .btn-clear { background: #495057; }
+        .btn-history { background: #339af0; }
+
+        .bulk-container {
+            background: #1a1d24;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .bulk-step {
+            margin-bottom: 28px;
+        }
+
+        .bulk-step h3 {
+            font-size: 14px;
+            text-transform: uppercase;
+            opacity: 0.7;
+            margin-bottom: 16px;
+        }
+
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 12px;
+        }
+
+        .template-card {
+            background: rgba(0,0,0,0.3);
+            border: 2px solid #2c3440;
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .template-card:hover {
+            border-color: #339af0;
+            transform: translateY(-2px);
+        }
+
+        .template-card.selected {
+            border-color: #339af0;
+            background: rgba(51, 154, 240, 0.1);
+        }
+
+        .template-card.severity-alarm.selected {
+            border-color: #e03131;
+            background: rgba(224, 49, 49, 0.1);
+        }
+
+        .template-card.severity-attention.selected {
+            border-color: #f08c00;
+            background: rgba(240, 140, 0, 0.1);
+        }
+
+        .bulk-summary {
+            background: rgba(51, 154, 240, 0.1);
+            border: 1px solid rgba(51, 154, 240, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .bulk-launch-btn {
+            width: 100%;
+            padding: 16px;
+            background: #e03131;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .bulk-launch-btn:disabled {
+            background: #495057;
+            cursor: not-allowed;
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .history-table th,
+        .history-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #2c3440;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        .history-table th {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.6;
+        }
+
+        .history-table code {
+            font-family: monospace;
+            background: rgba(255,255,255,0.08);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .history-item {
+            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 4px solid #495057;
+        }
+
+        .history-item.alarm {
+            border-left-color: #e03131;
+        }
+
+        .history-item.attention {
+            border-left-color: #f08c00;
+        }
+
+        .muted {
+            opacity: 0.65;
+        }
+    </style>
+</head>
+<body>
+    <h1>📡 ДИСПЕТЧЕРСКИЙ ПУЛЬТ: {{ loc_name }}</h1>
+
+    <div class="tabs">
+        <div class="tab active" data-tab="main" onclick="switchDeskTab('main')">📍 Локация</div>
+        <div class="tab" data-tab="alerts" onclick="switchDeskTab('alerts')">📢 Оповещения</div>
+        <div class="tab" data-tab="history" onclick="switchDeskTab('history')">📜 История</div>
+    </div>
+
+    <!-- Вкладка 1: Локация -->
+    <div id="main" class="content active">
+        <div style="max-width: 850px; margin: 0 auto;">
+            <div id="location-card" class="card">
+                Загрузка...
+            </div>
+        </div>
+    </div>
+
+    <!-- Вкладка 2: Оповещения -->
+    <div id="alerts" class="content">
+        <div class="bulk-container">
+            <div class="bulk-step">
+                <h3>Сценарии оповещения для локации</h3>
+                <div id="desk-templates-grid" class="template-grid">Загрузка...</div>
+            </div>
+
+            <div class="bulk-step">
+                <div id="desk-alert-summary" class="bulk-summary">
+                    Выберите сценарий оповещения
+                </div>
+
+                <button id="deskLaunchBtn" class="bulk-launch-btn" onclick="launchDeskAlert()" disabled>
+                    ЗАПУСТИТЬ ОПОВЕЩЕНИЕ
+                </button>
+            </div>
+
+            <div class="bulk-step">
+                <div id="desk-subscribers"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Вкладка 3: История -->
+    <div id="history" class="content">
+        <div style="max-width: 1100px; margin: 0 auto; display: grid; gap: 20px;">
+            <div class="card">
+                <h3 style="margin-bottom: 16px;">📜 История событий диспетчера</h3>
+                <div id="event-history">Загрузка...</div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 16px;">📞 История голосовых оповещений</h3>
+                <div id="campaign-history">Загрузка...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const LOC_ID = "{{ loc_id }}";
+        const LOC_NAME = "{{ loc_name }}";
+
+        const API_BASE = window.location.pathname.startsWith('/incident-dashboard/')
+            ? '/incident-dashboard/api'
+            : '/api';
+
+        let deskTemplates = [];
+        let selectedDeskTemplate = null;
+
+        function escapeHtml(text) {
+            if (!text) return "";
+
+            return String(text)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function formatTimestamp(ts) {
+            if (!ts) return "—";
+
+            try {
+                return new Date(ts).toLocaleString("ru-RU", {
+                    timeZone: "Asia/Novosibirsk",
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit"
+                });
+            } catch (e) {
+                return new Date(ts).toLocaleString("ru-RU");
+            }
+        }
+
+        function parseSubscriber(raw) {
+            const parts = String(raw).split(":");
+
+            return {
+                number: parts[0] || raw,
+                code: parts[1] || "",
+                description: parts[2] || ""
+            };
+        }
+
+        async function deskApiRequest(url, method = "GET", body = null) {
+            const headers = {
+                "Content-Type": "application/json"
+            };
+
+            const options = {
+                method,
+                headers
+            };
+
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+
+            const res = await fetch(`${API_BASE}/${url}`, options);
+
+            if (res.status === 403) {
+                throw new Error("Доступ запрещён. IP не входит в allowed_ips этой локации.");
+            }
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ detail: "Ошибка сети" }));
+                throw new Error(err.detail || `Ошибка: ${res.status}`);
+            }
+
+            return await res.json();
+        }
+
+        function switchDeskTab(tabName) {
+            document.querySelectorAll(".tab").forEach(tab => tab.classList.remove("active"));
+            document.querySelectorAll(".content").forEach(content => content.classList.remove("active"));
+
+            document.querySelector(`.tab[data-tab="${tabName}"]`).classList.add("active");
+            document.getElementById(tabName).classList.add("active");
+
+            if (tabName === "main") {
+                loadDeskState();
+            }
+
+            if (tabName === "alerts") {
+                loadDeskTemplates();
+            }
+
+            if (tabName === "history") {
+                loadDeskHistory();
+            }
+        }
+
+        // =====================================================================
+        // Вкладка 1: Локация
+        // =====================================================================
+
+        async function loadDeskState() {
+            try {
+                const loc = await deskApiRequest(`v1/desk/${LOC_ID}/state`, "GET");
+                renderMainCard(loc);
+            } catch (e) {
+                document.getElementById("location-card").innerHTML = `
+                    <div style="color: #e03131;">
+                        Ошибка: ${escapeHtml(e.message)}
+                    </div>
+                `;
+            }
+        }
+
+        function renderMainCard(loc) {
+            const card = document.getElementById("location-card");
+            card.className = `card mode-${loc.mode}`;
+
+            const statusMap = {
+                normal: "НОРМА",
+                attention: "ВНИМАНИЕ",
+                alarm: "ТРЕВОГА"
+            };
+
+            let alertsHtml = "";
+
+            if (loc.alerts && loc.alerts.length > 0) {
+                alertsHtml = '<div class="section-title">📢 Сценарии оповещения</div>';
+
+                loc.alerts.forEach(alert => {
+                    const codeBadge = alert.trigger_code
+                        ? `<span class="alert-code">IVR: ${escapeHtml(alert.trigger_code)}</span>`
+                        : "";
+
+                    alertsHtml += `
+                        <div class="alert-item severity-${alert.severity}">
+                            <div class="alert-header">
+                                <div class="alert-name">${escapeHtml(alert.name)}</div>
+                                ${codeBadge}
+                            </div>
+                            <div class="alert-text">${escapeHtml(alert.text_for_matrix || "")}</div>
+                            <button class="launch-btn severity-${alert.severity}"
+                                    data-template="${escapeHtml(alert.template_id)}"
+                                    data-name="${escapeHtml(alert.name)}"
+                                    onclick="quickLaunchFromButton(this)">
+                                ▶ Запустить обзвон
+                            </button>
+                        </div>
+                    `;
+                });
+            }
+
+            let subsHtml = "";
+
+            if (loc.alerts && loc.alerts.length > 0) {
+                const uniqueSubs = new Map();
+
+                loc.alerts.forEach(alert => {
+                    (alert.subscribers || []).forEach(sub => {
+                        if (!uniqueSubs.has(sub)) {
+                            uniqueSubs.set(sub, sub);
+                        }
+                    });
+                });
+
+                if (uniqueSubs.size > 0) {
+                    let subsListHtml = "";
+
+                    uniqueSubs.forEach(raw => {
+                        const sub = parseSubscriber(raw);
+
+                        subsListHtml += `
+                            <div class="subscriber-item">
+                                <span class="subscriber-number">${escapeHtml(sub.number)}</span>
+                                <span class="subscriber-desc">${escapeHtml(sub.description || sub.code)}</span>
+                            </div>
+                        `;
+                    });
+
+                    subsHtml = `
+                        <div class="section-title">👥 Список оповещения</div>
+                        <button class="btn-toggle-subs" onclick="toggleDeskSubs()">
+                            Показать/скрыть абонентов (${uniqueSubs.size})
+                        </button>
+                        <div id="desk-main-subscribers" class="subscribers-box">
+                            ${subsListHtml}
+                        </div>
+                    `;
+                }
+            }
+
+            let eventsHtml = "";
+
+            if (loc.events && loc.events.length > 0) {
+                eventsHtml = '<div class="section-title">🔔 Активные события</div><div class="events-list">';
+
+                loc.events.forEach(ev => {
+                    const evTime = formatTimestamp(ev.timestamp);
+
+                    eventsHtml += `
+                        <div class="event-item ${ev.type}">
+                            <div class="event-header">
+                                <span>${ev.type === "alarm" ? "🚨 ТРЕВОГА" : "⚠️ ВНИМАНИЕ"}</span>
+                                <button class="event-close" onclick="closeDeskEvent('${ev.id}')">✕</button>
+                            </div>
+                            ${ev.comment ? `<div class="event-comment">${escapeHtml(ev.comment)}</div>` : ""}
+                            <div class="event-meta">${evTime} • ${escapeHtml(ev.source || "")}</div>
+                        </div>
+                    `;
+                });
+
+                eventsHtml += "</div>";
+            }
+
+            card.innerHTML = `
+                <div class="header">
+                    <div class="icon">${loc.icon || "📍"}</div>
+                    <div class="name">${escapeHtml(loc.name)}</div>
+                </div>
+
+                <div class="status-text">
+                    ${statusMap[loc.mode] || "НЕИЗВЕСТНО"} • ${loc.events.length} событий
+                </div>
+
+                ${alertsHtml}
+                ${subsHtml}
+                ${eventsHtml}
+
+                <div class="controls">
+                    <button class="btn btn-a" onclick="createDeskIncident('attention')">⚠️ Вним.</button>
+                    <button class="btn btn-al" onclick="createDeskIncident('alarm')">🚨 Тревога</button>
+                    <button class="btn btn-clear" onclick="clearDeskAll()">Очистить</button>
+                    <button class="btn btn-history" onclick="switchDeskTab('history')">📜 История</button>
+                </div>
+            `;
+        }
+
+        function toggleDeskSubs() {
+            const box = document.getElementById("desk-main-subscribers");
+
+            if (!box) return;
+
+            box.style.display = box.style.display === "block" ? "none" : "block";
+        }
+
+        async function createDeskIncident(type) {
+            const comment = prompt(
+                `Комментарий для ${type === "alarm" ? "ТРЕВОГИ" : "ВНИМАНИЯ"}:`
+            ) || "";
+
+            try {
+                await deskApiRequest(`location/${LOC_ID}/event`, "POST", {
+                    type,
+                    comment
+                });
+
+                await loadDeskState();
+            } catch (e) {
+                alert("Ошибка: " + e.message);
+            }
+        }
+
+        async function closeDeskEvent(eventId) {
+            if (!confirm("Закрыть событие?")) return;
+
+            try {
+                await deskApiRequest(`location/${LOC_ID}/close`, "POST", {
+                    event_id: eventId
+                });
+
+                await loadDeskState();
+            } catch (e) {
+                alert("Ошибка: " + e.message);
+            }
+        }
+
+        async function clearDeskAll() {
+            if (!confirm("Закрыть ВСЕ события?")) return;
+
+            try {
+                await deskApiRequest(`location/${LOC_ID}/clear-all`, "POST");
+                await loadDeskState();
+            } catch (e) {
+                alert("Ошибка: " + e.message);
+            }
+        }
+
+        function quickLaunchFromButton(button) {
+            const templateId = button.dataset.template;
+            const templateName = button.dataset.name;
+
+            quickLaunch(templateId, templateName);
+        }
+
+        async function quickLaunch(templateId, templateName) {
+            if (!confirm(`Запустить "${templateName}"?\nБудет выполнен голосовой обзвон.`)) return;
+
+            try {
+                const result = await deskApiRequest(`v1/desk/${LOC_ID}/alert/trigger`, "POST", {
+                    template_id: templateId
+                });
+
+                alert(`✅ Оповещение запущено.\n\nCampaign ID: ${result.campaign_id || "N/A"}`);
+
+                await loadDeskState();
+            } catch (e) {
+                alert("Ошибка: " + e.message);
+            }
+        }
+
+        // =====================================================================
+        // Вкладка 2: Оповещения
+        // =====================================================================
+
+        async function loadDeskTemplates() {
+            try {
+                const data = await deskApiRequest(`v1/desk/${LOC_ID}/templates`, "GET");
+                deskTemplates = data.templates || [];
+
+                renderDeskTemplates();
+                updateDeskAlertSummary();
+            } catch (e) {
+                document.getElementById("desk-templates-grid").innerHTML = `
+                    <div style="color: #e03131;">
+                        Ошибка: ${escapeHtml(e.message)}
+                    </div>
+                `;
+            }
+        }
+
+        function renderDeskTemplates() {
+            const grid = document.getElementById("desk-templates-grid");
+            grid.innerHTML = "";
+
+            deskTemplates.forEach(tpl => {
+                const card = document.createElement("div");
+
+                card.className = `template-card severity-${tpl.severity}`;
+
+                if (selectedDeskTemplate === tpl.template_id) {
+                    card.classList.add("selected");
+                }
+
+                card.onclick = () => selectDeskTemplate(tpl.template_id);
+
+                const text = tpl.default_text || tpl.matrix_text || "";
+
+                card.innerHTML = `
+                    <div style="font-weight: 800; margin-bottom: 8px;">
+                        ${escapeHtml(tpl.name)}
+                    </div>
+                    <div style="font-size: 12px; opacity: 0.8; line-height: 1.4;">
+                        ${escapeHtml(text.substring(0, 110))}${text.length > 110 ? "..." : ""}
+                    </div>
+                    <div style="margin-top: 10px; font-size: 12px; opacity: 0.7;">
+                        Абонентов: ${tpl.subscribers_count}
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        function selectDeskTemplate(templateId) {
+            selectedDeskTemplate = templateId;
+
+            renderDeskTemplates();
+            updateDeskAlertSummary();
+        }
+
+        function updateDeskAlertSummary() {
+            const summary = document.getElementById("desk-alert-summary");
+            const subscribersBox = document.getElementById("desk-subscribers");
+            const launchBtn = document.getElementById("deskLaunchBtn");
+
+            const tpl = deskTemplates.find(t => t.template_id === selectedDeskTemplate);
+
+            if (!tpl) {
+                summary.innerHTML = "Выберите сценарий оповещения";
+                subscribersBox.innerHTML = "";
+                launchBtn.disabled = true;
+                launchBtn.textContent = "ЗАПУСТИТЬ ОПОВЕЩЕНИЕ";
+                return;
+            }
+
+            summary.innerHTML = `
+                <strong>${escapeHtml(tpl.name)}</strong><br>
+                Абонентов: ${tpl.subscribers_count}<br>
+                <span class="muted">${escapeHtml(tpl.default_text || "")}</span>
+            `;
+
+            launchBtn.disabled = false;
+            launchBtn.textContent = `🚀 ЗАПУСТИТЬ: ${tpl.name}`;
+
+            let subsHtml = "";
+
+            if (tpl.subscribers && tpl.subscribers.length > 0) {
+                subsHtml = `
+                    <div class="section-title">👥 Абоненты для этого сценария</div>
+                    <div class="subscribers-box" style="display: block;">
+                `;
+
+                tpl.subscribers.forEach(raw => {
+                    const sub = parseSubscriber(raw);
+
+                    subsHtml += `
+                        <div class="subscriber-item">
+                            <span class="subscriber-number">${escapeHtml(sub.number)}</span>
+                            <span class="subscriber-desc">${escapeHtml(sub.description || sub.code)}</span>
+                        </div>
+                    `;
+                });
+
+                subsHtml += "</div>";
+            }
+
+            subscribersBox.innerHTML = subsHtml;
+        }
+
+        async function launchDeskAlert() {
+            if (!selectedDeskTemplate) return;
+
+            const tpl = deskTemplates.find(t => t.template_id === selectedDeskTemplate);
+
+            if (!tpl) return;
+
+            if (!confirm(`Запустить "${tpl.name}" для локации "${LOC_NAME}"?`)) return;
+
+            const btn = document.getElementById("deskLaunchBtn");
+            btn.disabled = true;
+            btn.textContent = "⏳ Запуск...";
+
+            try {
+                const result = await deskApiRequest(`v1/desk/${LOC_ID}/alert/trigger`, "POST", {
+                    template_id: selectedDeskTemplate
+                });
+
+                alert(`✅ Оповещение запущено.\n\nCampaign ID: ${result.campaign_id || "N/A"}`);
+            } catch (e) {
+                alert("Ошибка: " + e.message);
+            } finally {
+                btn.disabled = false;
+                updateDeskAlertSummary();
+            }
+        }
+
+        // =====================================================================
+        // Вкладка 3: История
+        // =====================================================================
+
+        async function loadDeskHistory() {
+            await Promise.all([
+                loadDeskEventHistory(),
+                loadDeskCampaignHistory()
+            ]);
+        }
+
+        async function loadDeskEventHistory() {
+            const container = document.getElementById("event-history");
+
+            try {
+                const data = await deskApiRequest(`v1/desk/${LOC_ID}/event-history`, "GET");
+                const events = data.events || [];
+
+                if (!events.length) {
+                    container.innerHTML = '<div class="muted">Нет событий за последние 48 часов.</div>';
+                    return;
+                }
+
+                let html = "";
+
+                events.forEach(ev => {
+                    const created = formatTimestamp(ev.timestamp);
+                    const closed = ev.closed_at ? formatTimestamp(ev.closed_at) : "—";
+                    const reason = ev.close_reason === "auto" ? "🤖 Авто" : "🖐 Вручную";
+
+                    html += `
+                        <div class="history-item ${ev.type}">
+                            <div style="font-weight: 700; margin-bottom: 5px;">
+                                ${ev.type === "alarm" ? "🚨 ТРЕВОГА" : "⚠️ ВНИМАНИЕ"}
+                            </div>
+                            <div>${escapeHtml(ev.comment || "Без комментария")}</div>
+                            <div class="muted" style="margin-top: 5px; font-size: 12px;">
+                                Создано: ${created}<br>
+                                Закрыто: ${closed} • ${reason}<br>
+                                Инициатор: ${escapeHtml(ev.source || "")}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                container.innerHTML = html;
+            } catch (e) {
+                container.innerHTML = `<div style="color:#e03131;">Ошибка: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        async function loadDeskCampaignHistory() {
+            const container = document.getElementById("campaign-history");
+
+            try {
+                const data = await deskApiRequest(`v1/desk/${LOC_ID}/campaign-history?limit=50`, "GET");
+                const items = data.history || [];
+
+                if (!items.length) {
+                    container.innerHTML = '<div class="muted">История голосовых оповещений пока пуста.</div>';
+                    return;
+                }
+
+                let rows = "";
+
+                items.forEach(item => {
+                    const campaignId = item.campaign_id || "";
+                    const campaignShort = campaignId ? campaignId.substring(0, 8) : "—";
+
+                    rows += `
+                        <tr>
+                            <td>${escapeHtml(item.started_at_local || formatTimestamp(item.started_at_utc))}</td>
+                            <td>${escapeHtml(item.template_name || item.template_id || "")}</td>
+                            <td><code title="${escapeHtml(campaignId)}">${campaignShort}</code></td>
+                            <td>${item.subscribers_count ?? 0}</td>
+                            <td>${escapeHtml(item.source || "")}</td>
+                            <td>
+                                <button class="launch-btn" onclick="showDeskCampaignDetails('${campaignId}')">
+                                    Детали
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                container.innerHTML = `
+                    <div style="overflow-x: auto;">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Время UTC+7</th>
+                                    <th>Сценарий</th>
+                                    <th>Campaign ID</th>
+                                    <th>Абонентов</th>
+                                    <th>Источник</th>
+                                    <th>Детали</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) {
+                container.innerHTML = `<div style="color:#e03131;">Ошибка: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        async function showDeskCampaignDetails(campaignId) {
+            const overlayId = `desk-campaign-modal-${campaignId}`;
+
+            const overlay = document.createElement("div");
+            overlay.id = overlayId;
+
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.85);
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            `;
+
+            overlay.innerHTML = `
+                <div style="background: #1a1d24; padding: 30px; border-radius: 16px; max-width: 900px; width: 100%;">
+                    Загрузка деталей кампании...
+                </div>
+            `;
+
+            overlay.onclick = (e) => {
+                if (e.target === overlay) overlay.remove();
+            };
+
+            document.body.appendChild(overlay);
+
+            try {
+                const data = await deskApiRequest(
+                    `v1/desk/${LOC_ID}/campaign/${campaignId}/details`,
+                    "GET"
+                );
+
+                const events = data.events || [];
+
+                let rows = "";
+
+                if (!events.length) {
+                    rows = `
+                        <tr>
+                            <td colspan="4" class="muted">Нет событий</td>
+                        </tr>
+                    `;
+                } else {
+                    rows = events.map(ev => {
+                        const eventType = ev.event || "unknown";
+
+                        let info = "";
+
+                        if (eventType === "start_campaign") {
+                            info = `${ev.loc_name || ""} / ${ev.template_id || ""} / абонентов: ${ev.total_subscribers ?? ""}`;
+                        } else {
+                            info = ev.number || "";
+                        }
+
+                        return `
+                            <tr>
+                                <td>${formatTimestamp(ev.timestamp)}</td>
+                                <td>${escapeHtml(eventType)}</td>
+                                <td>${escapeHtml(info)}</td>
+                                <td>${escapeHtml(ev.status || "")}</td>
+                            </tr>
+                        `;
+                    }).join("");
+                }
+
+                overlay.innerHTML = `
+                    <div style="
+                        background: #1a1d24;
+                        padding: 30px;
+                        border-radius: 16px;
+                        max-width: 900px;
+                        width: 100%;
+                        max-height: 85vh;
+                        overflow-y: auto;
+                    ">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                            <h3 style="font-weight:700;">Детали кампании</h3>
+                            <button onclick="document.getElementById('${overlayId}').remove()" style="
+                                background: #495057;
+                                color: white;
+                                border: none;
+                                padding: 8px 14px;
+                                border-radius: 6px;
+                                cursor: pointer;
+                            ">✕</button>
+                        </div>
+
+                        <div style="margin-bottom: 16px; font-size: 13px; opacity: 0.8;">
+                            Campaign ID: <code>${escapeHtml(campaignId)}</code>
+                        </div>
+
+                        <div style="overflow-x:auto;">
+                            <table class="history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Время UTC+7</th>
+                                        <th>Событие</th>
+                                        <th>Информация</th>
+                                        <th>Статус</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rows}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div style="margin-top:20px; text-align:right;">
+                            <button onclick="document.getElementById('${overlayId}').remove()" style="
+                                background: #339af0;
+                                color: white;
+                                border: none;
+                                padding: 10px 18px;
+                                border-radius: 6px;
+                                cursor: pointer;
+                            ">Закрыть</button>
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                overlay.innerHTML = `
+                    <div style="
+                        background: #1a1d24;
+                        padding: 30px;
+                        border-radius: 16px;
+                        max-width: 600px;
+                        width: 100%;
+                        color: #e03131;
+                    ">
+                        Ошибка загрузки деталей кампании:<br><br>
+                        ${escapeHtml(e.message)}
+                    </div>
+                `;
+            }
+        }
+
+        // Инициализация
+        loadDeskState();
+        loadDeskTemplates();
+
+        setInterval(() => {
+            const mainTabActive = document.getElementById("main").classList.contains("active");
+
+            if (mainTabActive) {
+                loadDeskState();
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

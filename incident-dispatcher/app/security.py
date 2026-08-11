@@ -127,23 +127,57 @@ async def verify_dashboard_access(
 
 
     
+# async def verify_location_access_or_dashboard(
+#     request: Request,
+#     loc_id: str,
+#     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+#     x_api_token: Optional[str] = Header(default=None, alias="X-API-Token")
+# ) -> MatrixUser:
+#     """Проверка доступа: ИЛИ токен Matrix, ИЛИ глобальный токен дашборда + IP"""
+#     loc = LOCATIONS.get(loc_id)
+#     if not loc:
+#         raise HTTPException(status_code=404, detail="Location not found")
+    
+#     logger.info(f"=== ПРОВЕРКА ДОСТУПА К {loc_id} ===")
+#     logger.info(f"Authorization: {authorization[:20] if authorization else None}...")
+#     logger.info(f"X-API-Token: {x_api_token[:20] if x_api_token else None}...")
+    
+#     # 🔥 Проверяем глобальный токен дашборда + IP
+#     # dashboard_token = CONFIG.get("dashboard_token")
+#     dashboard_token = settings.DASHBOARD_API_TOKEN
+#     if x_api_token and dashboard_token and x_api_token == dashboard_token:
+#         if check_ip_whitelist(request, CONFIG["dashboard_allowed_ips"]):
+#             logger.info(f"✅ Доступ к {loc_id} разрешен по токену дашборда + IP")
+#             return MatrixUser(user_id="dashboard", is_moderator=True)
+#         else:
+#             logger.error("❌ Токен дашборда верный, но IP не в whitelist")
+#             raise HTTPException(status_code=403, detail="IP не в белом списке")
+    
+#     # Если не дашборд — проверяем токен Matrix
+#     logger.info("Проверка через Matrix token...")
+#     return await get_matrix_user_impl(request, loc_id, authorization, require_moderator=True)    
+
+
 async def verify_location_access_or_dashboard(
     request: Request,
     loc_id: str,
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
     x_api_token: Optional[str] = Header(default=None, alias="X-API-Token")
 ) -> MatrixUser:
-    """Проверка доступа: ИЛИ токен Matrix, ИЛИ глобальный токен дашборда + IP"""
+    """Проверка доступа: ИЛИ токен Matrix, ИЛИ глобальный токен дашборда + IP, ИЛИ allowed_ips локации"""
     loc = LOCATIONS.get(loc_id)
     if not loc:
         raise HTTPException(status_code=404, detail="Location not found")
     
-    logger.info(f"=== ПРОВЕРКА ДОСТУПА К {loc_id} ===")
-    logger.info(f"Authorization: {authorization[:20] if authorization else None}...")
-    logger.info(f"X-API-Token: {x_api_token[:20] if x_api_token else None}...")
+    client_ip = get_client_ip(request)
     
-    # 🔥 Проверяем глобальный токен дашборда + IP
-    # dashboard_token = CONFIG.get("dashboard_token")
+    # 🔥 1. ПРОВЕРКА: IP входит в allowed_ips этой конкретной локации? (Цеховой пульт)
+    allowed_ips = loc.get("allowed_ips", [])
+    if allowed_ips and check_ip_whitelist(request, allowed_ips):
+        logger.info(f"✅ Доступ к {loc_id} разрешен по allowed_ips для IP {client_ip}")
+        return MatrixUser(user_id=f"local_desk_{loc_id}", is_moderator=True)
+    
+    # 2. ПРОВЕРКА: Глобальный токен дашборда + IP
     dashboard_token = settings.DASHBOARD_API_TOKEN
     if x_api_token and dashboard_token and x_api_token == dashboard_token:
         if check_ip_whitelist(request, CONFIG["dashboard_allowed_ips"]):
@@ -151,11 +185,11 @@ async def verify_location_access_or_dashboard(
             return MatrixUser(user_id="dashboard", is_moderator=True)
         else:
             logger.error("❌ Токен дашборда верный, но IP не в whitelist")
-            raise HTTPException(status_code=403, detail="IP не в белом списке")
+            raise HTTPException(status_code=403, detail="IP не в белом списке дашборда")
     
-    # Если не дашборд — проверяем токен Matrix
+    # 3. ПРОВЕРКА: Токен Matrix
     logger.info("Проверка через Matrix token...")
-    return await get_matrix_user_impl(request, loc_id, authorization, require_moderator=True)    
+    return await get_matrix_user_impl(request, loc_id, authorization, require_moderator=True)
 
 async def verify_matrix_moderator(room_id: str, user_token: str) -> tuple:
     """Проверяет, является ли пользователь модератором (>=50) в комнате"""

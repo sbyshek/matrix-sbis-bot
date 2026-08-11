@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # Хранение истории (в часах)
     HISTORY_TTL_HOURS: int = 48
-  
+    CAMPAIGN_HISTORY_LIMIT: int = 500
 
     ASTERISK_API_TOKEN: str = None
     VOICE_API_URL: str = "http://voice-api:8000"

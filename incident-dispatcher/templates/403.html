@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>403 - Доступ запрещён</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f1115;
+            color: #e1e7ef;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .error-code {
+            font-size: 110px;
+            font-weight: 800;
+            color: #f08c00;
+            margin: 0;
+            line-height: 1;
+        }
+
+        .error-message {
+            font-size: 24px;
+            margin: 20px 0;
+            color: #8a95a5;
+        }
+
+        .back-button {
+            display: inline-block;
+            padding: 14px 28px;
+            background: #339af0;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div style="text-align: center;">
+        <h1 class="error-code">403</h1>
+        <p class="error-message">Доступ запрещён</p>
+        <p style="color: #8a95a5;">{{ message or "Ваш IP не входит в список разрешённых для этого пульта." }}</p>
+        <a href="/" class="back-button">← На главную</a>
+    </div>
+</body>
+</html>
