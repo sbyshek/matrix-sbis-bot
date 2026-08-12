@@ -806,6 +806,95 @@
             } catch (e) { alert('Ошибка: ' + e.message); }
         }
         
+        async function loadHistory() {
+            const container = document.getElementById('campaigns-list');
+            container.innerHTML = 'Загрузка...';
+
+            try {
+                // 🔥 ЕДИНАЯ история из Redis, а не campaigns из voice-api
+                const data = await apiRequest('v1/history?limit=100', 'GET');
+                const items = data.history || [];
+
+                if (!items.length) {
+                    container.innerHTML = `
+                        <div style="text-align: center; opacity: 0.6; padding: 40px;">
+                            История оповещений пока пуста
+                        </div>
+                    `;
+                    return;
+                }
+
+                let rows = '';
+
+                items.forEach(item => {
+                    let typeLabel = '';
+
+                    if (item.category === 'campaign') {
+                        typeLabel = '📞 Обзвон';
+                    } else if (item.action === 'closed' || item.action === 'auto_closed') {
+                        typeLabel = '✅ Закрыто';
+                    } else if (item.action === 'cleared') {
+                        typeLabel = '🧹 Очистка';
+                    } else if (item.severity === 'alarm') {
+                        typeLabel = '🚨 Тревога';
+                    } else if (item.severity === 'attention') {
+                        typeLabel = '⚠️ Внимание';
+                    } else {
+                        typeLabel = 'ℹ️ Событие';
+                    }
+
+                    const campaignId = item.campaign_id || '';
+                    const campaignShort = campaignId ? campaignId.substring(0, 8) : '—';
+
+                    const detailsBtn = campaignId
+                        ? `<button class="launch-btn" onclick="showCampaignDetails('${campaignId}')">Детали</button>`
+                        : '—';
+
+                    rows += `
+                        <tr style="border-bottom: 1px solid #2c3440;">
+                            <td style="padding: 10px 12px; white-space: nowrap;">${item.ts_local || ''}</td>
+                            <td style="padding: 10px 12px;">${item.loc_name || item.loc_id || ''}</td>
+                            <td style="padding: 10px 12px; white-space: nowrap;">${typeLabel}</td>
+                            <td style="padding: 10px 12px;">
+                                <strong>${item.title || ''}</strong><br>
+                                <span style="opacity: 0.7; font-size: 12px;">${item.description || ''}</span>
+                            </td>
+                            <td style="padding: 10px 12px; font-size: 12px;">${item.source || ''}</td>
+                            <td style="padding: 10px 12px;"><code>${campaignShort}</code></td>
+                            <td style="padding: 10px 12px;">${detailsBtn}</td>
+                        </tr>
+                    `;
+                });
+
+                container.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="font-weight: 600;">📜 Единая история</h3>
+                        <button class="btn btn-history" onclick="loadHistory()">🔄 Обновить</button>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid #2c3440;">
+                                    <th style="text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Время</th>
+                                    <th style="text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Локация</th>
+                                    <th style="text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Тип</th>
+                                    <th style="text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Описание</th>
+                                    <th style="text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Источник</th>
+                                    <th style="text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Campaign ID</th>
+                                    <th style="text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Детали</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>
+                `;
+
+            } catch (e) {
+                console.error(e);
+                container.innerHTML = `<div style="color: #e03131; padding: 20px;">Ошибка: ${e.message}</div>`;
+            }
+        }
+
         async function showHistory(locId) {
             try {
                 const data = await apiRequest(`v1/history?loc_id=${locId}&limit=100`, 'GET');
@@ -934,100 +1023,22 @@
             }
         }
         
-        async function loadHistory() {
-            const container = document.getElementById('campaigns-list');
-            container.innerHTML = 'Загрузка...';
-
-            try {
-                const data = await apiRequest('v1/alerts/history?limit=100', 'GET');
-                const items = data.history || [];
-
-                if (!items.length) {
-                    container.innerHTML = `
-                        <div style="text-align: center; opacity: 0.6; padding: 40px;">
-                            История оповещений пока пуста
-                        </div>
-                    `;
-                    return;
-                }
-
-                const rows = items.map(item => {
-                    const campaignId = item.campaign_id || "";
-                    const campaignShort = campaignId ? campaignId.substring(0, 8) : "—";
-
-                    return `
-                        <tr>
-                            <td>${escapeHtml(item.started_at_local || formatTimestamp(item.started_at_utc))}</td>
-                            <td>${escapeHtml(item.loc_name || item.loc_id || "")}</td>
-                            <td>${escapeHtml(item.template_name || item.template_id || "")}</td>
-                            <td>
-                                <code title="${escapeHtml(campaignId)}">${campaignShort}</code>
-                            </td>
-                            <td>${item.subscribers_count ?? 0}</td>
-                            <td>${escapeHtml(item.source || "")}</td>
-                            <td>
-                                <button class="launch-btn" onclick="showCampaignDetails('${campaignId}')">
-                                    Детали
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                }).join("");
-
-                container.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h3 style="font-weight: 600;">История оповещений</h3>
-                        <button class="btn btn-history" onclick="loadHistory()">🔄 Обновить</button>
-                    </div>
-
-                    <div style="overflow-x: auto;">
-                        <table class="history-table">
-                            <thead>
-                                <tr>
-                                    <th>Время UTC+7</th>
-                                    <th>Локация</th>
-                                    <th>Сценарий</th>
-                                    <th>Campaign ID</th>
-                                    <th>Абонентов</th>
-                                    <th>Источник</th>
-                                    <th>Детали</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${rows}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-
-            } catch (e) {
-                console.error(e);
-                container.innerHTML = `
-                    <div style="color: #e03131; padding: 20px;">
-                        Ошибка: ${escapeHtml(e.message)}
-                    </div>
-                `;
-            }
-        }
+        
 
 
         async function showCampaignDetails(campaignId) {
-            const overlayId = `campaign-modal-${campaignId}`;
+            const overlayId = 'campaign-details-modal';
+
+            // Удаляем старую модалку, если была
+            const old = document.getElementById(overlayId);
+            if (old) old.remove();
 
             const overlay = document.createElement('div');
             overlay.id = overlayId;
             overlay.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0,0,0,0.85);
-                z-index: 9999;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.85); z-index: 9999;
+                display: flex; align-items: center; justify-content: center; padding: 20px;
             `;
 
             overlay.innerHTML = `
@@ -1036,124 +1047,77 @@
                 </div>
             `;
 
-            overlay.onclick = (e) => {
-                if (e.target === overlay) {
-                    overlay.remove();
-                }
-            };
-
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
             document.body.appendChild(overlay);
 
             try {
                 const data = await apiRequest(`v1/campaign/${campaignId}/details`, 'GET');
                 const events = data.events || [];
 
-                let rows = "";
+                let rows = '';
 
                 if (!events.length) {
-                    rows = `
-                        <tr>
-                            <td colspan="4" style="opacity: 0.6;">
-                                Нет событий по этой кампании
-                            </td>
-                        </tr>
-                    `;
+                    rows = `<tr><td colspan="4" style="padding: 20px; text-align: center; opacity: 0.6;">Нет событий</td></tr>`;
                 } else {
-                    rows = events.map(ev => {
-                        const eventType = ev.event || "unknown";
+                    events.forEach(ev => {
+                        const eventType = ev.event || 'unknown';
+                        const time = ev.timestamp ? new Date(ev.timestamp).toLocaleString('ru-RU') : '—';
 
-                        let info = "";
+                        let info = '';
 
-                        if (eventType === "start_campaign") {
-                            info = `
-                                ${escapeHtml(ev.loc_name || "")}
-                                ${ev.template_id ? ` / ${escapeHtml(ev.template_id)}` : ""}
-                                ${typeof ev.total_subscribers !== "undefined" ? ` / абонентов: ${ev.total_subscribers}` : ""}
-                            `;
+                        if (eventType === 'start_campaign') {
+                            info = `${ev.loc_name || ''} / ${ev.template_id || ''} / абонентов: ${ev.total_subscribers ?? '—'}`;
                         } else {
-                            info = ev.number ? escapeHtml(ev.number) : "";
+                            info = ev.number || '';
                         }
 
-                        return `
-                            <tr>
-                                <td>${formatTimestamp(ev.timestamp)}</td>
-                                <td>${escapeHtml(eventType)}</td>
-                                <td>${info}</td>
-                                <td>${escapeHtml(ev.status || "")}</td>
+                        rows += `
+                            <tr style="border-bottom: 1px solid #2c3440;">
+                                <td style="padding: 10px;">${time}</td>
+                                <td style="padding: 10px;">${eventType}</td>
+                                <td style="padding: 10px;">${info}</td>
+                                <td style="padding: 10px;">${ev.status || ''}</td>
                             </tr>
                         `;
-                    }).join("");
+                    });
                 }
 
                 overlay.innerHTML = `
-                    <div style="
-                        background: #1a1d24;
-                        padding: 30px;
-                        border-radius: 16px;
-                        max-width: 900px;
-                        width: 100%;
-                        max-height: 85vh;
-                        overflow-y: auto;
-                    ">
+                    <div style="background: #1a1d24; padding: 30px; border-radius: 16px; max-width: 900px; width: 100%; max-height: 85vh; overflow-y: auto;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h3 style="font-weight: 600;">Детали кампании</h3>
-                            <button onclick="document.getElementById('${overlayId}').remove()" style="
-                                background: #495057;
-                                color: white;
-                                border: none;
-                                padding: 8px 14px;
-                                border-radius: 6px;
-                                cursor: pointer;
-                            ">✕</button>
+                            <h3 style="font-weight: 600;">📞 Детали кампании</h3>
+                            <button onclick="document.getElementById('${overlayId}').remove()" style="background: #495057; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer;">✕</button>
                         </div>
 
                         <div style="margin-bottom: 16px; font-size: 13px; opacity: 0.8;">
-                            Campaign ID: <code>${escapeHtml(campaignId)}</code>
+                            Campaign ID: <code>${campaignId}</code>
                         </div>
 
                         <div style="overflow-x: auto;">
-                            <table class="history-table">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                                 <thead>
-                                    <tr>
-                                        <th>Время UTC+7</th>
-                                        <th>Событие</th>
-                                        <th>Информация</th>
-                                        <th>Статус</th>
+                                    <tr style="border-bottom: 2px solid #2c3440;">
+                                        <th style="text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Время</th>
+                                        <th style="text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Событие</th>
+                                        <th style="text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Информация</th>
+                                        <th style="text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Статус</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${rows}
-                                </tbody>
+                                <tbody>${rows}</tbody>
                             </table>
                         </div>
 
                         <div style="margin-top: 20px; text-align: right;">
-                            <button onclick="document.getElementById('${overlayId}').remove()" style="
-                                background: #339af0;
-                                color: white;
-                                border: none;
-                                padding: 10px 18px;
-                                border-radius: 6px;
-                                cursor: pointer;
-                            ">Закрыть</button>
+                            <button onclick="document.getElementById('${overlayId}').remove()" style="background: #339af0; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer;">Закрыть</button>
                         </div>
                     </div>
                 `;
 
             } catch (e) {
                 console.error(e);
-
                 overlay.innerHTML = `
-                    <div style="
-                        background: #1a1d24;
-                        padding: 30px;
-                        border-radius: 16px;
-                        max-width: 600px;
-                        width: 100%;
-                        color: #e03131;
-                    ">
-                        Ошибка загрузки деталей кампании:<br><br>
-                        ${escapeHtml(e.message)}
+                    <div style="background: #1a1d24; padding: 30px; border-radius: 16px; max-width: 600px; width: 100%; color: #e03131;">
+                        Ошибка загрузки деталей кампании:<br><br>${e.message}
                     </div>
                 `;
             }
