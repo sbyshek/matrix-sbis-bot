@@ -29,6 +29,11 @@ class CampaignTriggerRequest(BaseModel):
     loc_name: str
     initiator: str
 
+class IVRTriggerRequest(BaseModel):
+    code: str
+    caller: str
+
+
 # Настройка логгера
 logging.basicConfig(
     level=logging.INFO,
@@ -636,3 +641,53 @@ async def get_campaign_status(
     
     status = await asterisk_manager.get_campaign_status(campaign_id, redis_client)
     return status
+
+
+
+@app.post("/api/v1/campaign/trigger-ivr")
+async def trigger_ivr_campaign(
+    request: IVRTriggerRequest,
+    x_secret: str = Header(..., alias="X-Secret")
+):
+    """
+    📞 Прокси для IVR: Asterisk → voice-api → incident-dispatcher
+    
+    Asterisk знает только X-Secret, voice-api проксирует с правильным токеном.
+    """
+    verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
+    
+    logger.info(f"📞 IVR proxy: code={request.code}, caller={request.caller}")
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{settings.INCIDENT_DISPATCHER_URL}/api/v1/alert/trigger-by-code",
+                json={
+                    "code": request.code,
+                    "caller": request.caller
+                },
+                headers={
+                    "X-Local-Token": settings.INCIDENT_DISPATCHER_TOKEN,
+                    "Content-Type": "application/json"
+                }
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(
+                    f"✅ IVR triggered: code={request.code}, "
+                    f"matched={len(result.get('matched', []))} locations"
+                )
+                return result
+            
+            elif response.status_code == 404:
+                logger.warning(f"❌ IVR code not found: {request.code}")
+                raise HTTPException(status_code=404, detail="Code not found")
+            
+            else:
+                logger.error(f"❌ Dispatcher error: {response.status_code} - {response.text}")
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+                
+    except httpx.RequestError as e:
+        logger.error(f"❌ Failed to call incident-dispatcher: {e}")
+        raise HTTPException(status_code=503, detail="incident-dispatcher unavailable")

@@ -38,3 +38,14 @@ class BulkAlertTriggerRequest(BaseModel):
     
 class DeskAlertTriggerRequest(BaseModel):
     template_id: str
+    
+    
+class CustomAlertTriggerRequest(BaseModel):
+    audio_file: str
+    loc_ids: List[str]
+    text_for_matrix: str = ""
+
+
+class AlertTriggerByCodeRequest(BaseModel):
+    code: str
+    caller: str

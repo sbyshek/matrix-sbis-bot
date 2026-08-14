@@ -12,3 +12,6 @@ data/
 *cursor.json
 *.pyc
 __pycache__/
+
+*.wav
+incident-dispatcher/data/audio/*.*

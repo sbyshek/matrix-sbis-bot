@@ -255,6 +255,8 @@ services:
       - ./incident-dispatcher/app:/app/app      # Live-reload кода
       - ./incident-dispatcher/logs:/app/logs    # Логи
       - ./incident-dispatcher/config:/app/config # Для locations.json
+      - ./incident-dispatcher/data:/app/data      # Аудиофайлы оповещений
+      - ./incident-dispatcher/templates:/app/templates
     depends_on:
       redis:
         condition: service_healthy

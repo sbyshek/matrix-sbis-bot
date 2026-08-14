@@ -313,6 +313,7 @@
         <div class="tab active" onclick="switchTab('locations')">📍 Локации</div>
         <div class="tab" onclick="switchTab('alerts')">📢 Оповещения</div>
         <div class="tab" onclick="switchTab('history')">📜 История</div>
+        <div class="tab" onclick="switchTab('audio')">🎧 Аудиофайлы</div>
     </div>
     
     <!-- Раздел 1: Локации -->
@@ -322,6 +323,10 @@
     
     <!-- Раздел 2: Массовые оповещения -->
     <div id="alerts" class="content">
+        <div style="max-width: 800px; margin: 0 auto 20px; display: flex; gap: 10px; justify-content: center;">
+            <button id="modeTemplateBtn" class="btn" style="background: #339af0; flex: 0 0 220px;" onclick="setAlertMode('template')">📋 По шаблону</button>
+            <button id="modeCustomBtn" class="btn" style="background: #495057; flex: 0 0 220px;" onclick="setAlertMode('custom')">🎙️ Своё сообщение</button>
+        </div>
         <div class="bulk-container">
             <div class="bulk-step">
                 <h3>1. Выберите сценарий оповещения</h3>
@@ -348,12 +353,66 @@
                 </button>
             </div>
         </div>
+
+        <div id="custom-container" class="bulk-container" style="display: none;">
+            <div class="bulk-step">
+                <h3>1. Надиктуйте сообщение</h3>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <button id="recBtn" class="btn" style="background: #e03131; flex: 0 0 170px;" onclick="toggleRecording()">🎙️ Записать</button>
+                    <span id="recStatus" style="opacity: 0.7; font-size: 13px;"></span>
+                </div>
+                <audio id="customAudioPlayer" controls style="display: none; width: 100%; margin-top: 14px;"></audio>
+                <div id="convertedPreview" style="display: none; margin-top: 10px;">
+                    <div style="font-size: 12px; opacity: 0.7; margin-bottom: 6px;">🔊 Так это услышит Астериск (WAV 8kHz mono):</div>
+                    <audio id="customAudioPlayerConverted" controls style="width: 100%;"></audio>
+                </div>
+            </div>
+
+            <div class="bulk-step">
+                <h3>2. Текст в Matrix (необязательно)</h3>
+                <input id="customMatrixText" placeholder="🔔 Тестовое оповещение: проверка связи"
+                    style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #2c3440; background: #15191e; color: #fff; font-size: 14px;">
+            </div>
+
+            <div class="bulk-step">
+                <h3>3. Выберите локации</h3>
+                <div id="custom-locations-list">Загрузка...</div>
+            </div>
+
+            <button id="customLaunchBtn" class="bulk-launch-btn" onclick="launchCustomAlert()">
+                🚀 ЗАПУСТИТЬ ТЕСТОВОЕ ОПОВЕЩЕНИЕ
+            </button>
+        </div>
+
+        
     </div>
     
+    
+
     <!-- Раздел 3: История -->
     <div id="history" class="content">
         <div id="campaigns-list" style="background: #1a1d24; border-radius: 16px; padding: 30px; max-width: 1000px; margin: 0 auto;">
             Загрузка...
+        </div>
+    </div>
+
+
+    <!-- Раздел 4: Аудиофайлы -->
+    <div id="audio" class="content">
+        <div style="background: #1a1d24; border-radius: 16px; padding: 30px; max-width: 1100px; margin: 0 auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 10px; flex-wrap: wrap;">
+                <h3 style="font-weight: 600;">🎧 Аудиофайлы оповещений</h3>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <select id="audioTemplateSelect" style="padding: 10px; border-radius: 8px; border: 1px solid #2c3440; background: #15191e; color: #fff; font-size: 13px;">
+                        <option value="">— не привязывать к шаблону —</option>
+                    </select>
+                    <label class="btn btn-history" style="cursor: pointer; flex: 0;">📤 Загрузить
+                        <input type="file" id="audioFileInput" accept=".wav,.mp3,.ogg,.webm,.m4a,.flac" style="display: none;" onchange="uploadAudioFile()">
+                    </label>
+                    <button class="btn btn-history" style="flex: 0;" onclick="loadAudioFiles()">🔄</button>
+                </div>
+            </div>
+            <div id="audio-list">Загрузка...</div>
         </div>
     </div>
 
@@ -400,6 +459,7 @@
             if (tabName === 'locations') updateDashboard();
             if (tabName === 'alerts') loadBulkAlertData();
             if (tabName === 'history') loadHistory();
+            if (tabName === 'audio') loadAudioFiles();
         }
         
         
@@ -771,7 +831,8 @@
                 });
                 if (res.ok) {
                     const result = await res.json();
-                    alert(`✅ "${templateName}" запущено!\nCampaign ID: ${result.campaign_id || 'N/A'}`);
+                    // alert(`✅ "${templateName}" запущено!\nCampaign ID: ${result.campaign_id || 'N/A'}`);
+                    showLaunchResultModal(`✅ "${templateName}" запущено`, result);
                     updateDashboard();
                 } else {
                     const err = await res.json();
@@ -1028,101 +1089,452 @@
 
         async function showCampaignDetails(campaignId) {
             const overlayId = 'campaign-details-modal';
-
-            // Удаляем старую модалку, если была
-            const old = document.getElementById(overlayId);
-            if (old) old.remove();
+            document.getElementById(overlayId)?.remove();
 
             const overlay = document.createElement('div');
             overlay.id = overlayId;
-            overlay.style.cssText = `
-                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-                background: rgba(0,0,0,0.85); z-index: 9999;
-                display: flex; align-items: center; justify-content: center; padding: 20px;
-            `;
-
-            overlay.innerHTML = `
-                <div style="background: #1a1d24; padding: 30px; border-radius: 16px; max-width: 900px; width: 100%;">
-                    Загрузка деталей кампании...
-                </div>
-            `;
-
-            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+            overlay.innerHTML = '<div style="background:#1a1d24;padding:30px;border-radius:16px;">Загрузка...</div>';
+            overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
             document.body.appendChild(overlay);
 
             try {
                 const data = await apiRequest(`v1/campaign/${campaignId}/details`, 'GET');
                 const events = data.events || [];
+                const launch = data.launch_details;
 
-                let rows = '';
+                // ── Сводка фактических исходов по номерам ──
+                const perNumber = {};
+                events.forEach(ev => {
+                    if (!ev.number) return;
+                    if (!perNumber[ev.number]) perNumber[ev.number] = { final: null, answered: false, time: null };
+                    const rec = perNumber[ev.number];
+                    if (ev.event === 'call_answered') rec.answered = true;
+                    if (ev.event === 'call_finished') { rec.final = ev.status; rec.time = ev.timestamp; }
+                    if (!rec.time) rec.time = ev.timestamp;
+                });
 
-                if (!events.length) {
-                    rows = `<tr><td colspan="4" style="padding: 20px; text-align: center; opacity: 0.6;">Нет событий</td></tr>`;
-                } else {
-                    events.forEach(ev => {
-                        const eventType = ev.event || 'unknown';
-                        const time = ev.timestamp ? new Date(ev.timestamp).toLocaleString('ru-RU') : '—';
+                const badge = s => ({
+                    completed:   '✅ Дослушано',
+                    interrupted: '⏹ Бросил трубку',
+                    noanswer:    '📵 Не ответил',
+                    busy:        '🔔 Занято',
+                    cancelled:   '❌ Сброшен',
+                    unavailable: '⚠️ Недоступен',
+                    congestion:  '⚠️ Перегрузка'
+                }[s] || (s === null ? '🕐 В процессе' : s));
 
-                        let info = '';
+                let summaryRows = Object.entries(perNumber).map(([number, rec]) => `
+                    <tr style="border-bottom:1px solid #2c3440;">
+                        <td style="padding:8px 10px;font-family:monospace;">${number}</td>
+                        <td style="padding:8px 10px;">${rec.final ? badge(rec.final) : (rec.answered ? badge(null) : '—')}</td>
+                        <td style="padding:8px 10px;font-size:12px;opacity:.7;">${rec.time ? new Date(rec.time).toLocaleString('ru-RU') : ''}</td>
+                    </tr>`).join('');
 
-                        if (eventType === 'start_campaign') {
-                            info = `${ev.loc_name || ''} / ${ev.template_id || ''} / абонентов: ${ev.total_subscribers ?? '—'}`;
-                        } else {
-                            info = ev.number || '';
-                        }
-
-                        rows += `
-                            <tr style="border-bottom: 1px solid #2c3440;">
-                                <td style="padding: 10px;">${time}</td>
-                                <td style="padding: 10px;">${eventType}</td>
-                                <td style="padding: 10px;">${info}</td>
-                                <td style="padding: 10px;">${ev.status || ''}</td>
-                            </tr>
-                        `;
-                    });
+                // ── Детали запуска (очередь) ──
+                let launchHtml = '';
+                if (launch?.details?.length) {
+                    launchHtml = `
+                        <h4 style="margin:16px 0 8px;">🚀 Запуск: ${launch.success ?? 0} успех / ${launch.error ?? 0} ошибок</h4>
+                        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                            <tbody>${launch.details.map(d => `
+                                <tr style="border-bottom:1px solid #2c3440;">
+                                    <td style="padding:6px 10px;">${d.subscriber || '—'}</td>
+                                    <td style="padding:6px 10px;">${d.status === 'success' ? '✅' : '❌ ' + (d.error || '')}</td>
+                                </tr>`).join('')}
+                            </tbody>
+                        </table>`;
                 }
 
                 overlay.innerHTML = `
-                    <div style="background: #1a1d24; padding: 30px; border-radius: 16px; max-width: 900px; width: 100%; max-height: 85vh; overflow-y: auto;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h3 style="font-weight: 600;">📞 Детали кампании</h3>
-                            <button onclick="document.getElementById('${overlayId}').remove()" style="background: #495057; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer;">✕</button>
+                    <div style="background:#1a1d24;padding:30px;border-radius:16px;max-width:800px;width:100%;max-height:85vh;overflow-y:auto;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                            <h3>📞 Кампания <code>${campaignId.substring(0, 8)}</code></h3>
+                            <button onclick="document.getElementById('${overlayId}').remove()"
+                                    style="background:#495057;color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;">✕</button>
                         </div>
 
-                        <div style="margin-bottom: 16px; font-size: 13px; opacity: 0.8;">
-                            Campaign ID: <code>${campaignId}</code>
-                        </div>
+                        <h4 style="margin:0 0 8px;">📊 Итоги обзвона</h4>
+                        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                            <thead><tr style="border-bottom:2px solid #2c3440;">
+                                <th style="text-align:left;padding:8px 10px;">Номер</th>
+                                <th style="text-align:left;padding:8px 10px;">Итог</th>
+                                <th style="text-align:left;padding:8px 10px;">Время</th>
+                            </tr></thead>
+                            <tbody>${summaryRows || '<tr><td colspan="3" style="padding:12px;opacity:.6;">Звонков ещё нет</td></tr>'}</tbody>
+                        </table>
 
-                        <div style="overflow-x: auto;">
-                            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                                <thead>
-                                    <tr style="border-bottom: 2px solid #2c3440;">
-                                        <th style="text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Время</th>
-                                        <th style="text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Событие</th>
-                                        <th style="text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Информация</th>
-                                        <th style="text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; opacity: 0.6;">Статус</th>
-                                    </tr>
-                                </thead>
-                                <tbody>${rows}</tbody>
-                            </table>
-                        </div>
+                        ${launchHtml}
 
-                        <div style="margin-top: 20px; text-align: right;">
-                            <button onclick="document.getElementById('${overlayId}').remove()" style="background: #339af0; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer;">Закрыть</button>
+                        <div style="margin-top:20px;text-align:right;">
+                            <button onclick="document.getElementById('${overlayId}').remove()"
+                                    style="background:#339af0;color:white;border:none;padding:10px 18px;border-radius:6px;cursor:pointer;">Закрыть</button>
                         </div>
-                    </div>
-                `;
+                    </div>`;
 
             } catch (e) {
-                console.error(e);
-                overlay.innerHTML = `
-                    <div style="background: #1a1d24; padding: 30px; border-radius: 16px; max-width: 600px; width: 100%; color: #e03131;">
-                        Ошибка загрузки деталей кампании:<br><br>${e.message}
-                    </div>
-                `;
+                overlay.innerHTML = `<div style="background:#1a1d24;padding:30px;border-radius:16px;color:#e03131;">Ошибка: ${e.message}</div>`;
             }
         }
+
+        function showLaunchResultModal(title, result) {
+            const res = result.voice_api_response?.results || {};
+            const details = res.details || [];
+
+            let rows = '';
+            details.forEach(d => {
+                const ok = d.status === 'success';
+                rows += `
+                    <tr style="border-bottom: 1px solid #2c3440;">
+                        <td style="padding: 8px 10px;">${d.subscriber || d.number || '—'}</td>
+                        <td style="padding: 8px 10px;">${ok ? '✅ В очереди' : '❌ Ошибка'}</td>
+                        <td style="padding: 8px 10px; font-size: 12px; opacity: .7;">
+                            ${ok ? (d.channel || '') : (d.error || '')}
+                        </td>
+                    </tr>`;
+            });
+
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+            modal.innerHTML = `
+                <div style="background:#1a1d24;padding:30px;border-radius:16px;max-width:700px;width:100%;max-height:80vh;overflow-y:auto;">
+                    <h3 style="margin-bottom:16px;">${title}</h3>
+                    <div style="margin-bottom:16px;font-size:15px;">
+                        📊 Кампания: <strong style="color:#69db7c;">${res.success ?? 0} успех</strong>,
+                        <strong style="color:#ff8787;">${res.error ?? 0} ошибок</strong>
+                        из ${details.length}
+                    </div>
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <thead><tr style="border-bottom:2px solid #2c3440;">
+                            <th style="text-align:left;padding:8px 10px;">Абонент</th>
+                            <th style="text-align:left;padding:8px 10px;">Статус</th>
+                            <th style="text-align:left;padding:8px 10px;">Канал / причина</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                    <div style="margin-top:20px;text-align:right;">
+                        <button onclick="this.closest('div[style*=fixed]').remove()"
+                                style="background:#339af0;color:white;border:none;padding:10px 18px;border-radius:6px;cursor:pointer;">
+                            Закрыть
+                        </button>
+                    </div>
+                </div>`;
+            modal.onclick = e => { if (e.target === modal) modal.remove(); };
+            document.body.appendChild(modal);
+        }
         
+        // =============================================================================
+        // СТУДИЯ ТЕСТОВЫХ ОПОВЕЩЕНИЙ
+        // =============================================================================
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let recordedBlob = null;
+        let recTimer = null;
+        let recSeconds = 0;
+        let customLocations = new Set();
+
+        function setAlertMode(mode) {
+            document.getElementById('modeTemplateBtn').style.background = mode === 'template' ? '#339af0' : '#495057';
+            document.getElementById('modeCustomBtn').style.background = mode === 'custom' ? '#339af0' : '#495057';
+
+            document.querySelector('#alerts .bulk-container').style.display = mode === 'template' ? 'block' : 'none';
+            document.getElementById('custom-container').style.display = mode === 'custom' ? 'block' : 'none';
+
+            if (mode === 'custom') renderCustomLocations();
+        }
+
+        async function toggleRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                mediaRecorder = new MediaRecorder(stream);
+                recordedChunks = [];
+
+                mediaRecorder.ondataavailable = e => {
+                    if (e.data.size > 0) recordedChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    stream.getTracks().forEach(t => t.stop());
+                    clearInterval(recTimer);
+
+                    recordedBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+
+                    const player = document.getElementById('customAudioPlayer');
+                    player.src = URL.createObjectURL(recordedBlob);
+                    player.style.display = 'block';
+                    document.getElementById('convertedPreview').style.display = 'none';
+
+                    document.getElementById('recBtn').textContent = '🎙️ Перезаписать';
+                    document.getElementById('recBtn').style.background = '#e03131';
+                    document.getElementById('recStatus').textContent = `✅ Записано: ${recSeconds} сек`;
+                };
+
+                mediaRecorder.start();
+                recSeconds = 0;
+                recTimer = setInterval(() => {
+                    recSeconds++;
+                    document.getElementById('recStatus').textContent = `● Идёт запись... ${recSeconds} сек`;
+                }, 1000);
+
+                document.getElementById('recBtn').textContent = '⏹ Стоп';
+                document.getElementById('recBtn').style.background = '#495057';
+
+            } catch (e) {
+                alert(
+                    '❌ Микрофон недоступен: ' + e.message +
+                    '\n\nЗапись работает только по HTTPS или localhost.' +
+                    '\nВременное решение (Chrome): chrome://flags/#unsafely-treat-insecure-origin-as-secure' +
+                    '\n→ добавить http://192.168.168.58:8770 и перезапустить браузер.' +
+                    '\n\nПолноценно заработает после Этапа 5 (HTTPS).'
+                );
+            }
+        }
+
+        function renderCustomLocations() {
+            const list = document.getElementById('custom-locations-list');
+            list.innerHTML = '';
+
+            allLocations.forEach(loc => {
+                const div = document.createElement('div');
+                div.className = 'loc-checkbox';
+                div.innerHTML = `
+                    <input type="checkbox" id="cloc-${loc.id}" ${customLocations.has(loc.id) ? 'checked' : ''} onchange="toggleCustomLocation('${loc.id}')">
+                    <label for="cloc-${loc.id}">${loc.icon} ${loc.name}</label>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function toggleCustomLocation(locId) {
+            customLocations.has(locId) ? customLocations.delete(locId) : customLocations.add(locId);
+        }
+
+        async function launchCustomAlert() {
+            if (!recordedBlob) { alert('Сначала запишите сообщение 🎙️'); return; }
+            if (!customLocations.size) { alert('Выберите локации'); return; }
+            if (!confirm(`Запустить ТЕСТОВОЕ оповещение на ${customLocations.size} локациях?`)) return;
+
+            const btn = document.getElementById('customLaunchBtn');
+            btn.disabled = true;
+
+            try {
+                // 1. Загрузка + конвертация на диспетчере
+                btn.textContent = '⏳ Загрузка и конвертация...';
+                const fd = new FormData();
+                fd.append('file', recordedBlob, 'custom_test.webm');
+
+                const up = await fetch(`${API_BASE}/v1/audio/upload`, {
+                    method: 'POST',
+                    headers: { 'X-API-Token': DASHBOARD_TOKEN },
+                    body: fd
+                });
+
+                if (!up.ok) {
+                    const err = await up.json().catch(() => ({ detail: 'Ошибка загрузки' }));
+                    throw new Error(err.detail);
+                }
+
+                const { audio_file } = await up.json();
+
+                // 2. Предпрослушивание «как услышит Астериск»
+                try {
+                    const prev = await fetch(`${API_BASE}/v1/audio/${audio_file}.wav`, {
+                        headers: { 'X-API-Token': DASHBOARD_TOKEN }
+                    });
+                    if (prev.ok) {
+                        const blob = await prev.blob();
+                        const convPlayer = document.getElementById('customAudioPlayerConverted');
+                        convPlayer.src = URL.createObjectURL(blob);
+                        document.getElementById('convertedPreview').style.display = 'block';
+                    }
+                } catch (e) { /* предпрослушивание не критично */ }
+
+                // 3. Запуск обзвона
+                btn.textContent = '⏳ Запуск обзвона...';
+                const res = await apiRequest('v1/alert/trigger-custom', 'POST', {
+                    audio_file: audio_file,
+                    loc_ids: Array.from(customLocations),
+                    text_for_matrix: document.getElementById('customMatrixText').value.trim()
+                });
+
+                alert(
+                    `✅ Тестовое оповещение запущено!\n\n` +
+                    `Успешно: ${res.success.length}\nНе удалось: ${res.failed.length}\n\n` +
+                    `Файл: ${audio_file}\nПодробности — в «Детали» истории.`
+                );
+
+            } catch (e) {
+                alert('❌ Ошибка: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 ЗАПУСТИТЬ ТЕСТОВОЕ ОПОВЕЩЕНИЕ';
+            }
+        }
+
+
+// =============================================================================
+// УПРАВЛЕНИЕ АУДИОФАЙЛАМИ
+// =============================================================================
+        let audioUsageMap = {};
+
+        function formatSize(bytes) {
+            if (!bytes) return '—';
+            if (bytes < 1024) return bytes + ' Б';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' КБ';
+            return (bytes / 1024 / 1024).toFixed(1) + ' МБ';
+        }
+
+        async function loadAudioFiles() {
+            const container = document.getElementById('audio-list');
+            container.innerHTML = 'Загрузка...';
+            try {
+                const [audioRes, tplRes] = await Promise.all([
+                    apiRequest('v1/audio/list', 'GET'),
+                    apiRequest('v1/templates', 'GET')
+                ]);
+
+                // Карта: файл -> шаблоны, которые его используют
+                audioUsageMap = {};
+                (tplRes.templates || []).forEach(t => {
+                    const key = (t.audio_file || '').trim();
+                    if (key) (audioUsageMap[key] = audioUsageMap[key] || []).push(t);
+                });
+
+                // Заполняем select для привязки при загрузке
+                const select = document.getElementById('audioTemplateSelect');
+                select.innerHTML = '<option value="">— не привязывать к шаблону —</option>' +
+                    (tplRes.templates || []).map(t =>
+                        `<option value="${t.id}">${escapeHtml(t.name)}</option>`
+                    ).join('');
+
+                const files = audioRes.files || [];
+                if (!files.length) {
+                    container.innerHTML = '<div style="text-align:center;opacity:.6;padding:30px;">Аудиофайлов пока нет</div>';
+                    return;
+                }
+
+                let rows = '';
+                files.forEach(f => {
+                    const used = audioUsageMap[f.audio_file] || [];
+                    const linked = used.length > 0;
+                    const badges = linked
+                        ? used.map(t => `<span style="background:rgba(51,154,240,.15);color:#74c0fc;padding:2px 8px;border-radius:4px;font-size:11px;margin-right:4px;">${escapeHtml(t.name)}</span>`).join('')
+                        : '<span style="opacity:.5;font-size:11px;">не используется</span>';
+
+                    rows += `
+                        <tr style="border-bottom: 1px solid #2c3440;">
+                            <td style="padding:10px 12px;font-family:monospace;">${escapeHtml(f.filename)}</td>
+                            <td style="padding:10px 12px;white-space:nowrap;">${formatSize(f.size)}</td>
+                            <td style="padding:10px 12px;font-size:12px;opacity:.7;white-space:nowrap;">${formatTimestamp(f.modified)}</td>
+                            <td style="padding:10px 12px;">${badges}</td>
+                            <td style="padding:10px 12px;white-space:nowrap;">
+                                <button class="launch-btn" title="Прослушать" onclick="playAudioFile('${f.audio_file}')">▶</button>
+                                <button class="launch-btn" style="background:${linked ? '#495057' : '#e03131'};${linked ? 'opacity:.5;cursor:not-allowed;' : ''}"
+                                    ${linked ? 'disabled title="Файл используется шаблонами — удаление запрещено"' : 'title="Удалить"'}
+                                    onclick="deleteAudioFile('${f.audio_file}')">🗑</button>
+                            </td>
+                        </tr>`;
+                });
+
+                container.innerHTML = `
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid #2c3440;">
+                                    <th style="text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;opacity:.6;">Файл</th>
+                                    <th style="text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;opacity:.6;">Размер</th>
+                                    <th style="text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;opacity:.6;">Изменён</th>
+                                    <th style="text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;opacity:.6;">Шаблоны</th>
+                                    <th style="text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;opacity:.6;">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>`;
+            } catch (e) {
+                console.error(e);
+                container.innerHTML = `<div style="color:#e03131;padding:20px;">Ошибка: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        async function playAudioFile(audioFile) {
+            try {
+                const res = await fetch(`${API_BASE}/v1/audio/${audioFile}.wav`, {
+                    headers: { 'X-API-Token': DASHBOARD_TOKEN }
+                });
+                if (!res.ok) throw new Error('файл недоступен');
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+
+                const modal = document.createElement('div');
+                modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                modal.innerHTML = `
+                    <div style="background:#1a1d24;padding:24px;border-radius:16px;max-width:480px;width:100%;">
+                        <div style="font-weight:600;margin-bottom:12px;">🔊 ${escapeHtml(audioFile)}</div>
+                        <audio controls autoplay src="${url}" style="width:100%;"></audio>
+                        <div style="margin-top:14px;text-align:right;">
+                            <button class="launch-btn" onclick="this.closest('div[style*=fixed]').remove()">Закрыть</button>
+                        </div>
+                    </div>`;
+                modal.onclick = e => { if (e.target === modal) modal.remove(); };
+                document.body.appendChild(modal);
+            } catch (e) {
+                alert('❌ Не удалось воспроизвести: ' + e.message);
+            }
+        }
+
+        async function deleteAudioFile(audioFile) {
+            if (!confirm(`Удалить файл ${audioFile}?`)) return;
+            try {
+                const res = await fetch(`${API_BASE}/v1/audio/${audioFile}`, {
+                    method: 'DELETE',
+                    headers: { 'X-API-Token': DASHBOARD_TOKEN }
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({ detail: 'Ошибка' }));
+                    throw new Error(err.detail);
+                }
+                loadAudioFiles();
+            } catch (e) {
+                alert('❌ ' + e.message);
+            }
+        }
+
+        async function uploadAudioFile() {
+            const input = document.getElementById('audioFileInput');
+            if (!input.files.length) return;
+
+            const fd = new FormData();
+            fd.append('file', input.files[0]);
+            const tpl = document.getElementById('audioTemplateSelect').value;
+            if (tpl) fd.append('template_id', tpl);
+
+            try {
+                const res = await fetch(`${API_BASE}/v1/audio/upload`, {
+                    method: 'POST',
+                    headers: { 'X-API-Token': DASHBOARD_TOKEN },
+                    body: fd
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({ detail: 'Ошибка загрузки' }));
+                    throw new Error(err.detail);
+                }
+                const data = await res.json();
+                alert(`✅ Загружено и сконвертировано: ${data.audio_file}`);
+                input.value = '';
+                loadAudioFiles();
+            } catch (e) {
+                alert('❌ ' + e.message);
+            }
+        }
+
+
         // Инициализация
         updateDashboard();
         setInterval(updateDashboard, 5000);

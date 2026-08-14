@@ -128,7 +128,7 @@ class AsteriskManagerService:
         """Инициировать звонок с поддержкой retry"""
         manager = await self.get_manager(node_id)
         node = next(n for n in asterisk_config.nodes if n.id == node_id)
-        
+
         try:
             dial_string, channel_type = self.resolve_channel(node, subscriber.number)
         except ValueError as e:
@@ -139,18 +139,43 @@ class AsteriskManagerService:
                 "campaign_id": campaign_id,
                 "retry_count": retry_count
             }
-        
-        logger.info(f" Originating call to {subscriber.display_name} via {dial_string} (type: {channel_type}, retry: {retry_count})")
-        
+
+        logger.info(
+            f"📞 Originating call to {subscriber.display_name} via {dial_string} "
+            f"(type: {channel_type}, retry: {retry_count})"
+        )
+
+        # 🔥 Имя транка считаем ОДИН раз (для внешних) или "internal"
+        trunk_name = dial_string.rsplit("/", 1)[0] if channel_type == "trunk" else "internal"
+
+        # 🔥 СТРАХОВКА ОТ ДВОЙНОГО ЗВОНКА:
+        # один номер не может быть вызван дважды в одной кампании
+        if redis_client and campaign_id:
+            dedup_key = f"voice:dedup:{campaign_id}:{subscriber.number}"
+            if not await redis_client.set(dedup_key, "1", nx=True, ex=600):
+                logger.warning(
+                    f"⚠️ Duplicate call prevented: {subscriber.number} "
+                    f"in campaign {campaign_id}"
+                )
+                return {
+                    "status": "skipped",
+                    "subscriber": subscriber.display_name,
+                    "error": "duplicate call blocked",
+                    "campaign_id": campaign_id,
+                    "retry_count": retry_count
+                }
+
         # Проверка лимита для внешних транков
         if channel_type == "trunk" and redis_client:
-            trunk_name = dial_string.rsplit("/", 1)[0]
             trunk_key = f"voice:active_trunk:{trunk_name}"
             active = await redis_client.get(trunk_key) or 0
             active = int(active)
-            
+
             if active >= node.max_concurrent_per_trunk:
-                logger.warning(f"⚠️ Trunk {trunk_name} at max capacity ({active}/{node.max_concurrent_per_trunk})")
+                logger.warning(
+                    f"⚠️ Trunk {trunk_name} at max capacity "
+                    f"({active}/{node.max_concurrent_per_trunk})"
+                )
                 return {
                     "status": "error",
                     "subscriber": subscriber.display_name,
@@ -159,10 +184,12 @@ class AsteriskManagerService:
                     "retry_count": retry_count,
                     "retryable": True
                 }
-            
+
             await redis_client.incr(trunk_key)
             await redis_client.expire(trunk_key, 3600)
-        
+
+        # 🔥 ВАЖНО: variables присваивается ВСЕГДА, для ЛЮБОГО типа канала.
+        # Этот блок должен быть на том же уровне отступа, что и if выше!
         variables = (
             f"TARGET_NUMBER={subscriber.number},"
             f"AUDIO_FILE={audio_file},"
@@ -171,22 +198,24 @@ class AsteriskManagerService:
             f"ALERT_CALLERID={node.caller_id},"
             f"DIAL_STRING={dial_string},"
             f"CHANNEL_TYPE={channel_type},"
+            f"EXTERNAL_TRUNK={trunk_name},"
             f"CAMPAIGN_ID={campaign_id or 'unknown'}"
         )
-        
+
         try:
             responses = await manager.send_action({
                 'Action': 'Originate',
                 'Channel': 'Local/s@pa_call_file_new/n',
-                'Context': 'pa_call_file_new',
+                # 'Context': 'pa_call_file_new',
+                'Context': 'alert_anchor',
                 'Exten': 's',
                 'Priority': '1',
                 'Variable': variables,
                 'Async': 'true'
             })
-            
+
             response_status = responses.get('Response', '') if hasattr(responses, 'get') else str(responses)
-            
+
             if 'Success' in response_status:
                 logger.info(f"✅ Queued call to {subscriber.display_name} via {dial_string}")
                 return {
@@ -202,9 +231,10 @@ class AsteriskManagerService:
             else:
                 error_msg = responses.get('Message', 'Unknown error') if hasattr(responses, 'get') else str(responses)
                 logger.error(f"❌ Failed to queue call to {subscriber.display_name}: {error_msg}")
+
                 if channel_type == "trunk" and redis_client:
-                    trunk_name = dial_string.rsplit("/", 1)[0]
                     await redis_client.decr(f"voice:active_trunk:{trunk_name}")
+
                 return {
                     "status": "error",
                     "subscriber": subscriber.display_name,
@@ -213,11 +243,13 @@ class AsteriskManagerService:
                     "retry_count": retry_count,
                     "retryable": True
                 }
+
         except Exception as e:
             logger.error(f"❌ Exception originating call to {subscriber.display_name}: {e}")
+
             if channel_type == "trunk" and redis_client:
-                trunk_name = dial_string.rsplit("/", 1)[0]
                 await redis_client.decr(f"voice:active_trunk:{trunk_name}")
+
             return {
                 "status": "error",
                 "subscriber": subscriber.display_name,

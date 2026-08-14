@@ -24,14 +24,14 @@ except Exception as e:
     LOCATIONS = {}
 
 # Загрузка шаблонов оповещений
-ALERT_TEMPLATES_FILE = "config/alert_templates.json"
-try:
-    with open(ALERT_TEMPLATES_FILE, "r", encoding="utf-8") as f:
-        ALERT_CONFIG = json.load(f)
-    logger.info(f"✅ Loaded {len(ALERT_CONFIG.get('audio_templates', []))} alert templates")
-except Exception as e:
-    logger.error(f"❌ Failed to load alert templates: {e}")
-    ALERT_CONFIG = {"audio_templates": [], "location_events": {}}
+# ALERT_TEMPLATES_FILE = "config/alert_templates.json"
+# try:
+#     with open(ALERT_TEMPLATES_FILE, "r", encoding="utf-8") as f:
+#         ALERT_CONFIG = json.load(f)
+#     logger.info(f"✅ Loaded {len(ALERT_CONFIG.get('audio_templates', []))} alert templates")
+# except Exception as e:
+#     logger.error(f"❌ Failed to load alert templates: {e}")
+#     ALERT_CONFIG = {"audio_templates": [], "location_events": {}}
 
 
 CONFIG = {

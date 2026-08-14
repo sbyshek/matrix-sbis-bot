@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 
-from app.core import api, dashboard, desk, location
+from app.core import api, dashboard, desk, location, audio
 from app.core.background import auto_close_checker
 from app.core.redis import init_locations_state, init_redis
 from app.security import LOCATIONS
@@ -29,6 +29,17 @@ async def lifespan(app: FastAPI):
     auto_close_task = asyncio.create_task(auto_close_checker())
 
     logger.info("✅ Incident Dispatcher started")
+    
+        # ⚠️ Подсветка дублей IVR-кодов при старте
+    # seen = {}
+    # for loc_id in LOCATIONS.keys():
+    #     for alert in get_location_alerts(loc_id):
+    #         c = str(alert.get("trigger_code", "")).strip()
+    #         if c:
+    #             seen.setdefault(c, []).append(f"{loc_id}:{alert['template_id']}")
+    # dups = {c: v for c, v in seen.items() if len(v) > 1}
+    # if dups:
+    #     logger.warning(f"⚠️ DUPLICATE IVR CODES detected: {dups}")
 
     yield
 
@@ -52,6 +63,7 @@ app.include_router(dashboard.router)
 app.include_router(location.router)
 app.include_router(api.router)
 app.include_router(desk.router)
+app.include_router(audio.router)
 
 
 @app.exception_handler(404)

@@ -193,3 +193,35 @@ async def save_event_history(
         json.dumps(history, ensure_ascii=False),
         ex=ttl_seconds
     )
+
+async def save_campaign_history(
+    campaign_id: str,
+    event: dict,
+) -> None:
+    """
+    Сохраняет закрытую компанию:
+        dispatch:campaign_launch:{campaign_id}
+    """
+    redis = get_redis()
+
+    event = dict(event)
+    ttl_seconds = settings.HISTORY_TTL_HOURS * 3600
+
+    await redis.set(
+        f"dispatch:campaign_launch:{campaign_id}",
+        json.dumps(event, ensure_ascii=False),
+        ex=ttl_seconds
+    )
+    
+async def get_campaign_history(campaign_id: str) -> list[dict]:
+    """
+    Возвращает старую историю событий по локации.
+    """
+    redis = get_redis()
+
+    raw = await redis.get(f"dispatch:campaign_launch:{campaign_id}")
+
+    if not raw:
+        return []
+
+    return json.loads(raw)

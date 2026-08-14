@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Устанавливаем системные зависимости (если понадобятся) и очищаем кэш
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+RUN apt-get update && apt-get install -y --no-install-recommends curl ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Копируем requirements и устанавливаем зависимости (этот слой закэшируется, если requirements не меняются)

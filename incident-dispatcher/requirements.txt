@@ -7,3 +7,5 @@ redis==5.0.1
 pydantic==2.7.0
 markdown==3.5.2
 pydantic-settings==2.5.0
+python-multipart==0.0.9
+aiofiles==24.1.0

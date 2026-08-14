@@ -202,7 +202,7 @@ restart-voice: ##  Рестарт VOICE сервисов
 	$(COMPOSE) restart ${VOICE}
 
 logs-voice: ##  Логи TASK сервисов
-	$(COMPOSE) logs -f ${VOICE}
+	$(COMPOSE) logs -f ${VOICE} --tail 30
 
 shell-voice: ## 🐚 Bash в VOICE
 	$(COMPOSE) exec ${VOICE} bash
