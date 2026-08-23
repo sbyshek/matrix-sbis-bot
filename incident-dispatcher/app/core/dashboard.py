@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from app.alert_svc import get_location_alerts
+from app.alert_svc import get_location_alerts, get_all_location_subscribers
 from app.core.config import settings
 from app.core.redis import get_state
 from app.core.security import verify_ip
@@ -58,7 +58,8 @@ async def get_dashboard_state(
             "events": state.get("events", []),
             "updated_at": state.get("updated_at", ""),
             "alerts": get_location_alerts(loc_id),
-            "allowed_ips": loc_data.get("allowed_ips", [])
+            "allowed_ips": loc_data.get("allowed_ips", []),
+            "subscribers": get_all_location_subscribers(loc_id),
         }
 
     return result

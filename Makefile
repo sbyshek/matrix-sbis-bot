@@ -44,7 +44,7 @@ up-f: ## 🚀 Запустить всё в foreground с логами
 	$(COMPOSE) --profile all up
 
 logs: ## 📜 Логи всех сервисов (follow)
-	$(COMPOSE) --profile all logs -f
+	$(COMPOSE) --profile all logs -f --tail 30
 
 status: ## 📊 Статус контейнеров
 	$(COMPOSE) ps

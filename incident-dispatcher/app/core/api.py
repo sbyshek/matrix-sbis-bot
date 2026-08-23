@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
-from app.alert_svc import TEMPLATES, TEMPLATES_FILE, get_location_alerts, get_template_by_id
+from app.alert_svc import TEMPLATES, TEMPLATES_FILE, get_location_alerts, get_template_by_id, get_all_location_subscribers
 from app.core.config import settings
 from app.core.history import get_unified_history, save_unified_history
 from app.core.matrix import send_alert_to_matrix, send_event_to_matrix, send_matrix_message
@@ -566,13 +566,16 @@ async def trigger_custom_alert(
             loc_data = LOCATIONS[loc_id]
 
             # Уникальные абоненты по ВСЕМ сценариям локации
-            seen = {}
-            for alert in get_location_alerts(loc_id):
-                for raw in alert.get("subscribers", []):
-                    key = str(raw).split(":", 1)[0].strip()
-                    if key and key not in seen:
-                        seen[key] = raw
-            subscribers = list(seen.values())
+            # seen = {}
+            # for alert in get_location_alerts(loc_id):
+            #     for raw in alert.get("subscribers", []):
+            #         key = str(raw).split(":", 1)[0].strip()
+            #         if key and key not in seen:
+            #             seen[key] = raw
+            # subscribers = list(seen.values())
+
+            
+            subscribers = get_all_location_subscribers(loc_id)
 
             if not subscribers:
                 return {"loc_id": loc_id, "error": "No subscribers"}

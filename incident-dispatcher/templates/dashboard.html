@@ -426,6 +426,8 @@
         let selectedLocations = new Set();
         let allLocations = [];
         let allTemplates = [];
+        let lastDashboardHash = '';
+        const expandedScenarios = new Set();
         
         async function apiRequest(url, method, body = null) {
             const headers = { 'Content-Type': 'application/json' };
@@ -700,6 +702,12 @@
         async function updateDashboard() {
             try {
                 const data = await apiRequest('dashboard', 'GET');
+
+
+                const hash = JSON.stringify(data);
+                if (hash === lastDashboardHash) return;
+                lastDashboardHash = hash;
+
                 const grid = document.getElementById('locations-grid');
                 grid.innerHTML = '';
                 
@@ -707,57 +715,56 @@
                     const statusMap = { normal: 'НОРМА', attention: 'ВНИМАНИЕ', alarm: 'ТРЕВОГА' };
                     
                     // Рендер сценариев
+                    // Сценарии: первый виден, остальные — под «Показать все»
                     let alertsHtml = '';
                     if (loc.alerts && loc.alerts.length > 0) {
                         alertsHtml = '<div class="section-title">📢 Сценарии оповещения</div>';
-                        loc.alerts.forEach(alert => {
+                        const expanded = expandedScenarios.has(id);
+
+                        const renderItem = (alert) => {
                             const codeBadge = alert.trigger_code ? `<span class="alert-code">IVR: ${alert.trigger_code}</span>` : '';
-                            alertsHtml += `
-                                <div class="alert-item severity-${alert.severity}">
-                                    <div class="alert-header">
-                                        <div class="alert-name">${alert.name}</div>
-                                        ${codeBadge}
-                                    </div>
-                                    <div class="alert-text">${alert.text_for_matrix}</div>
-                                    <button class="launch-btn severity-${alert.severity}" 
-                                            onclick="triggerAlert('${id}', '${alert.template_id}', '${alert.name.replace(/'/g, "\\'")}')">
-                                        ▶ Запустить обзвон
-                                    </button>
+                            return `
+                            <div class="alert-item severity-${alert.severity}">
+                                <div class="alert-header">
+                                    <div class="alert-name">${alert.name}</div>
+                                    ${codeBadge}
                                 </div>
-                            `;
-                        });
+                                <div class="alert-text">${alert.text_for_matrix}</div>
+                                <button class="launch-btn severity-${alert.severity}"
+                                    onclick="triggerAlert('${id}', '${alert.template_id}', '${alert.name.replace(/'/g, "\\'")}')">
+                                ▶ Запустить обзвон
+                                </button>
+                            </div>`;
+                        };
+
+                        alertsHtml += renderItem(loc.alerts[0]);
+
+                        if (loc.alerts.length > 1) {
+                            alertsHtml += `<div id="alerts-extra-${id}" style="display:${expanded ? 'block' : 'none'};">`;
+                            loc.alerts.slice(1).forEach(a => { alertsHtml += renderItem(a); });
+                            alertsHtml += `</div>
+                            <button id="btn-more-alerts-${id}" class="btn-toggle-subs" data-count="${loc.alerts.length}"
+                                    onclick="toggleScenarios('${id}')">
+                            ${expanded ? '▲ Скрыть' : `⋯ Все сценарии (${loc.alerts.length}) ▼`}
+                            </button>`;
+                        }
                     }
                     
                     // Рендер скрываемого списка абонентов
+                    // 🔥 Кнопка списка абонентов — из МАСТЕР-списка локации,
+                    // работает даже если сценариев нет
                     let subsHtml = '';
-                    let subCount = 0;
-                    if (loc.alerts && loc.alerts.length > 0) {
-                        const allSubs = new Map();
-                        loc.alerts.forEach(alert => {
-                            (alert.subscribers || []).forEach(sub => {
-                                if (!allSubs.has(sub)) allSubs.set(sub, sub);
-                            });
-                        });
-                        subCount = allSubs.size;
-                        
-                        if (subCount > 0) {
-                            let subsListHtml = '';
-                            allSubs.forEach(sub => {
-                                const parts = sub.split(':');
-                                const number = parts[0] || sub;
-                                const desc = parts.length > 2 ? parts[2] : (parts[1] || '');
-                                subsListHtml += `<div class="subscriber-item"><span class="subscriber-number">${number}</span><span class="subscriber-desc">${desc}</span></div>`;
-                            });
-                            
-                            subsHtml = `
-                                <button id="btn-subs-${id}" class="btn-toggle-subs" onclick="toggleSubs('${id}')">
-                                    👥 Список оповещения (${subCount}) ▼
-                                </button>
-                                <div id="subs-${id}" class="subscribers-box" style="display: none;">
-                                    <div class="subscribers-list">${subsListHtml}</div>
-                                </div>
-                            `;
-                        }
+                    let masterSubs = loc.subscribers || [];
+                    if (!masterSubs.length && loc.alerts) {   // фолбэк для старого бэкенда
+                        const m = new Map();
+                        loc.alerts.forEach(a => (a.subscribers || []).forEach(s => { if (!m.has(s)) m.set(s, s); }));
+                        masterSubs = [...m.values()];
+                    }
+                    if (masterSubs.length) {
+                        subsHtml = `
+                        <button class="btn-toggle-subs" onclick="showSubscribersModal('${id}', '${escapeHtml(loc.name)}')">
+                        👥 Список оповещения (${masterSubs.length})
+                        </button>`;
                     }
                     
                     // Рендер событий
@@ -806,15 +813,130 @@
             }
         }
         
-        function toggleSubs(locId) {
-            const el = document.getElementById('subs-' + locId);
-            const btn = document.getElementById('btn-subs-' + locId);
-            if (el.style.display === 'none' || !el.style.display) {
-                el.style.display = 'block';
-                btn.innerHTML = btn.innerHTML.replace('▼', '▲');
-            } else {
-                el.style.display = 'none';
-                btn.innerHTML = btn.innerHTML.replace('▲', '▼');
+        // =============================================================================
+        // МОДАЛКА СПИСКА ОПОВЕЩЕНИЯ (не зависит от автообновления грида)
+        // =============================================================================
+        let subsModalData = [];
+
+        function subRows(list) {
+            if (!list.length) return '<div style="opacity:.6;text-align:center;padding:20px;">Никого не нашли</div>';
+            return list.map(raw => {
+                const p = String(raw).split(':');
+                return `
+                <div class="subscriber-item" style="padding:8px 4px;border-bottom:1px solid #2c3440;align-items:center;">
+                    <span class="subscriber-number" style="font-size:14px;">${escapeHtml(p[0])}</span>
+                    <span style="opacity:.55;font-size:11px;font-family:monospace;">${escapeHtml(p[1] || '')}</span>
+                    <span class="subscriber-desc" style="font-size:12px;">${escapeHtml(p[2] || '')}</span>
+                </div>`;
+            }).join('');
+        }
+
+        function toggleScenarios(locId) {
+            const el = document.getElementById('alerts-extra-' + locId);
+            const btn = document.getElementById('btn-more-alerts-' + locId);
+            const willShow = el.style.display === 'none';
+            el.style.display = willShow ? 'block' : 'none';
+            willShow ? expandedScenarios.add(locId) : expandedScenarios.delete(locId);
+            btn.innerHTML = willShow ? '▲ Скрыть' : `⋯ Все сценарии (${btn.dataset.count}) ▼`;
+        }
+
+        // =============================================================================
+        // МОДАЛКА СПИСКА ОПОВЕЩЕНИЯ (вне грида — автообновление её не схлопывает)
+        // =============================================================================
+        //let subsModalData = [];
+
+        function subRows(list) {
+            if (!list.length) return '<div style="opacity:.6;text-align:center;padding:20px;">Никого не нашли</div>';
+            return list.map(raw => {
+                const p = String(raw).split(':');
+                return `
+                <div class="subscriber-item" style="padding:8px 4px;border-bottom:1px solid #2c3440;align-items:center;">
+                    <span class="subscriber-number" style="font-size:14px;">${escapeHtml(p[0])}</span>
+                    <span style="opacity:.55;font-size:11px;font-family:monospace;">${escapeHtml(p[1] || '')}</span>
+                    <span class="subscriber-desc" style="font-size:12px;">${escapeHtml(p[2] || '')}</span>
+                </div>`;
+            }).join('');
+        }
+
+        function openSubsModal(title, subs) {
+            const overlayId = 'subscribers-modal';
+            document.getElementById(overlayId)?.remove();
+            subsModalData = subs;
+
+            const overlay = document.createElement('div');
+            overlay.id = overlayId;
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+            overlay.innerHTML = `
+            <div style="background:#1a1d24;padding:30px;border-radius:16px;max-width:640px;width:100%;max-height:85vh;display:flex;flex-direction:column;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <h3 style="font-weight:600;">${escapeHtml(title)}</h3>
+                    <button onclick="document.getElementById('${overlayId}').remove()"
+                            style="background:#495057;color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;">✕</button>
+                </div>
+                <input id="subsSearch" placeholder="🔍 Поиск: номер, код, описание…" oninput="filterSubsModal()"
+                    style="width:100%;padding:12px;border-radius:8px;border:1px solid #2c3440;background:#15191e;color:#fff;font-size:14px;margin-bottom:12px;">
+                <div id="subsModalList" style="overflow-y:auto;flex:1;">${subRows(subs)}</div>
+                <div id="subsModalCount" style="margin-top:12px;font-size:11px;opacity:.6;">Показано ${subs.length} из ${subs.length}</div>
+            </div>`;
+            overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+            document.body.appendChild(overlay);
+            document.getElementById('subsSearch').focus();
+        }
+
+        function filterSubsModal() {
+            const q = (document.getElementById('subsSearch')?.value || '').trim().toLowerCase();
+            const filtered = q ? subsModalData.filter(s => String(s).toLowerCase().includes(q)) : subsModalData;
+            document.getElementById('subsModalList').innerHTML = subRows(filtered);
+            document.getElementById('subsModalCount').textContent = `Показано ${filtered.length} из ${subsModalData.length}`;
+        }
+
+        async function showSubscribersModal(locId, locName) {
+            try {
+                const data = await apiRequest(`location/${locId}/subscribers`, 'GET');
+                openSubsModal(`👥 ${locName} — ${data.total_count ?? (data.subscribers || []).length}`, data.subscribers || []);
+            } catch (e) {
+                alert('❌ ' + e.message);
+            }
+        }
+
+        function openSubsModal(title, subs) {
+            const overlayId = 'subscribers-modal';
+            document.getElementById(overlayId)?.remove();
+            subsModalData = subs;
+
+            const overlay = document.createElement('div');
+            overlay.id = overlayId;
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+            overlay.innerHTML = `
+            <div style="background:#1a1d24;padding:30px;border-radius:16px;max-width:640px;width:100%;max-height:85vh;display:flex;flex-direction:column;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <h3 style="font-weight:600;">${escapeHtml(title)}</h3>
+                    <button onclick="document.getElementById('${overlayId}').remove()"
+                            style="background:#495057;color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;">✕</button>
+                </div>
+                <input id="subsSearch" placeholder="🔍 Поиск: номер, код, описание…" oninput="filterSubsModal()"
+                    style="width:100%;padding:12px;border-radius:8px;border:1px solid #2c3440;background:#15191e;color:#fff;font-size:14px;margin-bottom:12px;">
+                <div id="subsModalList" style="overflow-y:auto;flex:1;">${subRows(subs)}</div>
+                <div id="subsModalCount" style="margin-top:12px;font-size:11px;opacity:.6;">Показано ${subs.length} из ${subs.length}</div>
+            </div>`;
+            overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+            document.body.appendChild(overlay);
+            document.getElementById('subsSearch').focus();
+        }
+
+        function filterSubsModal() {
+            const q = (document.getElementById('subsSearch')?.value || '').trim().toLowerCase();
+            const filtered = q ? subsModalData.filter(s => String(s).toLowerCase().includes(q)) : subsModalData;
+            document.getElementById('subsModalList').innerHTML = subRows(filtered);
+            document.getElementById('subsModalCount').textContent = `Показано ${filtered.length} из ${subsModalData.length}`;
+        }
+
+        async function showSubscribersModal(locId, locName) {
+            try {
+                const data = await apiRequest(`location/${locId}/subscribers`, 'GET');
+                openSubsModal(`👥 ${locName} — ${data.total_count ?? (data.subscribers || []).length}`, data.subscribers || []);
+            } catch (e) {
+                alert('❌ ' + e.message);
             }
         }
         
@@ -1231,6 +1353,7 @@
         let recordedBlob = null;
         let recTimer = null;
         let recSeconds = 0;
+        //let lastDashboardHash = '';
         let customLocations = new Set();
 
         function setAlertMode(mode) {

@@ -8,6 +8,7 @@
   "@m.evdokimov:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"],
   "@e.belenetskiy:matrix.vpk-oil.ru": ["vip"],
   "@s.polezaev:matrix.vpk-oil.ru": ["vip"],
+  "@n.ilin:matrix.vpk-oil.ru": ["vip"],
   "@e.gukova:matrix.vpk-oil.ru": ["admin", "vip", "kitchen"],
   "@t.fatianova:matrix.vpk-oil.ru": ["vip"],
   "@l.ryjenkova:matrix.vpk-oil.ru": ["vip"],
@@ -17,5 +18,16 @@
   "@m.shapovalov:matrix.vpk-oil.ru": ["vip"],
   "@v.stoporev:matrix.vpk-oil.ru": ["vip"],
   "@o.smirnova:matrix.vpk-oil.ru": ["vip"],
-  "@a.stebaylov:matrix.vpk-oil.ru": ["vip"]
+  "@a.stebaylov:matrix.vpk-oil.ru": ["vip"],
+  "@e.goryanskij:matrix.vpk-oil.ru": ["vip"],
+  "@e.sheludchenko:matrix.vpk-oil.ru": ["vip"],
+  "@e.sviridenko:matrix.vpk-oil.ru": ["vip"],
+  "@a.avdoshin:matrix.vpk-oil.ru": ["vip"],
+  "@v.dykan:matrix.vpk-oil.ru": ["vip"],
+  "@a.efremov:matrix.vpk-oil.ru": ["vip"],
+  "@a.torickiy:matrix.vpk-oil.ru": ["vip"],
+  "@s.tailakov:matrix.vpk-oil.ru": ["vip"],
+  "@t.krahaleva:matrix.vpk-oil.ru": ["vip"],
+  "@a-eiholc:matrix.vpk-oil.ru": ["vip"],
+  "@s.evseev:matrix.vpk-oil.ru": ["vip"]
 }

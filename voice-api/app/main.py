@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.dependencies import verify_voice_secret
 from app.services.asterisk_manager import asterisk_manager
 from app.core.subscribers import parse_subscribers_list, Subscriber, parse_subscriber
+from app.core.utils import get_play_count
 
 from pydantic import BaseModel
 
@@ -691,3 +692,12 @@ async def trigger_ivr_campaign(
     except httpx.RequestError as e:
         logger.error(f"❌ Failed to call incident-dispatcher: {e}")
         raise HTTPException(status_code=503, detail="incident-dispatcher unavailable")
+    
+    
+@app.get("/api/v1/subscriber/{number}/play-count")
+async def get_play_count_api(
+    number: str,
+    x_secret: str = Header(..., alias="X-Secret")
+):
+    verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
+    return {"number": number, "play_count": get_play_count(number)}

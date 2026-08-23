@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from app.alert_svc import get_location_alerts
+from app.alert_svc import get_location_alerts, get_all_location_subscribers
 from app.core.config import settings
 from app.core.history import save_unified_history
 from app.core.matrix import send_event_to_matrix
@@ -293,41 +293,25 @@ async def get_location_subscribers(
     request: Request = None
 ):
     token = x_local_token or x_api_token
-
     if not token:
         raise HTTPException(status_code=403, detail="Token required")
-
     if token != settings.LOCAL_API_TOKEN and token != settings.DASHBOARD_API_TOKEN:
         raise HTTPException(status_code=403, detail="Invalid token")
-
     verify_ip(request)
 
     if loc_id not in LOCATIONS:
         raise HTTPException(status_code=404, detail="Location not found")
 
-    alerts = get_location_alerts(loc_id)
-
     if template_id:
-        alerts = [
-            alert for alert in alerts
-            if alert.get("template_id") == template_id
-        ]
-
-    seen = {}
-
-    for alert in alerts:
-        for raw_sub in alert.get("subscribers", []):
-            raw_sub = str(raw_sub).strip()
-
-            if not raw_sub:
-                continue
-
-            key = subscriber_key(raw_sub)
-
-            if key not in seen:
-                seen[key] = raw_sub
-
-    subscribers = list(seen.values())
+        # Конкретный сценарий: разрешённый список (мастер или фильтр)
+        alert = next(
+            (a for a in get_location_alerts(loc_id) if a["template_id"] == template_id),
+            None
+        )
+        subscribers = alert["subscribers"] if alert else []
+    else:
+        # Вся локация
+        subscribers = get_all_location_subscribers(loc_id)
 
     return {
         "loc_id": loc_id,
@@ -335,3 +319,55 @@ async def get_location_subscribers(
         "total_count": len(subscribers),
         "subscribers": subscribers
     }
+
+# @router.get("/api/location/{loc_id}/subscribers")
+# async def get_location_subscribers(
+#     loc_id: str,
+#     template_id: str = None,
+#     x_local_token: str = Header(default=None, alias="X-Local-Token"),
+#     x_api_token: str = Header(default=None, alias="X-API-Token"),
+#     request: Request = None
+# ):
+#     token = x_local_token or x_api_token
+
+#     if not token:
+#         raise HTTPException(status_code=403, detail="Token required")
+
+#     if token != settings.LOCAL_API_TOKEN and token != settings.DASHBOARD_API_TOKEN:
+#         raise HTTPException(status_code=403, detail="Invalid token")
+
+#     verify_ip(request)
+
+#     if loc_id not in LOCATIONS:
+#         raise HTTPException(status_code=404, detail="Location not found")
+
+#     alerts = get_location_alerts(loc_id)
+
+#     if template_id:
+#         alerts = [
+#             alert for alert in alerts
+#             if alert.get("template_id") == template_id
+#         ]
+
+#     seen = {}
+
+#     for alert in alerts:
+#         for raw_sub in alert.get("subscribers", []):
+#             raw_sub = str(raw_sub).strip()
+
+#             if not raw_sub:
+#                 continue
+
+#             key = subscriber_key(raw_sub)
+
+#             if key not in seen:
+#                 seen[key] = raw_sub
+
+#     subscribers = list(seen.values())
+
+#     return {
+#         "loc_id": loc_id,
+#         "template_id": template_id,
+#         "total_count": len(subscribers),
+#         "subscribers": subscribers
+#     }

@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     VOICE_DATA_DIR: str = "/app/data/voice"
     VOICE_RETENTION_HOURS: int = 24
 
+
+    # Play repeat count 
+    DEFAULT_PLAY_COUNT: int = 2
     # Asterisk
     VOICE_MAX_CONCURRENT: int = 2
     ASTERISK_CALLBACK_TIMEOUT: int = 90

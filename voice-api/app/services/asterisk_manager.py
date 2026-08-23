@@ -7,16 +7,19 @@ import json
 from panoramisk import Manager
 from app.core.config import asterisk_config, AsteriskNode
 from app.core.subscribers import Subscriber
+from app.core.utils import get_play_count
 import redis.asyncio as redis
 import random
 import re
 from typing import List, Dict, Optional
+from pathlib import Path
 
 logger = logging.getLogger("voice-api.ami")
 
 MAX_RETRIES = 2
 RETRY_DELAY = 60  # секунд
 
+# 
 
 class AsteriskManagerService:
     """Управляет подключениями к Asterisk-узлам и инициирует звонки с очередью"""
@@ -128,6 +131,7 @@ class AsteriskManagerService:
         """Инициировать звонок с поддержкой retry"""
         manager = await self.get_manager(node_id)
         node = next(n for n in asterisk_config.nodes if n.id == node_id)
+        play_count = get_play_count(subscriber.number)
 
         try:
             dial_string, channel_type = self.resolve_channel(node, subscriber.number)
@@ -199,7 +203,8 @@ class AsteriskManagerService:
             f"DIAL_STRING={dial_string},"
             f"CHANNEL_TYPE={channel_type},"
             f"EXTERNAL_TRUNK={trunk_name},"
-            f"CAMPAIGN_ID={campaign_id or 'unknown'}"
+            f"CAMPAIGN_ID={campaign_id or 'unknown'}",
+            f"PLAY_COUNT={play_count}"
         )
 
         try:
