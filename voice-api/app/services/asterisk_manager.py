@@ -264,6 +264,57 @@ class AsteriskManagerService:
                 "retryable": True
             }
     
+    async def get_trunks_health(self, redis_client=None) -> dict:
+        """
+        🩺 Здоровье узлов Asterisk и транков:
+        - AMI-пинг по каждому активному узлу
+        - занятость транков по счётчикам Redis
+        """
+        nodes_out = []
+
+        for node in asterisk_config.nodes:
+            if not node.active:
+                continue
+
+            # ── AMI ping ──
+            ami_ok = True
+            try:
+                manager = await self.get_manager(node.id)
+                await asyncio.wait_for(
+                    manager.send_action({'Action': 'Ping'}),
+                    timeout=3
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ AMI ping failed for {node.id}: {e}")
+                ami_ok = False
+
+            # ── Транки ──
+            trunks_out = []
+            for trunk in node.external_trunks:
+                active = 0
+                try:
+                    if redis_client:
+                        active = int(await redis_client.get(f"voice:active_trunk:{trunk}") or 0)
+                except Exception:
+                    active = -1
+
+                trunks_out.append({
+                    "name": trunk,
+                    "active": active,
+                    "max": node.max_concurrent_per_trunk,
+                    "status": "full" if active >= node.max_concurrent_per_trunk else "ok"
+                })
+
+            nodes_out.append({
+                "id": node.id,
+                "name": node.name,
+                "ami": "ok" if ami_ok else "down",
+                "trunks": trunks_out
+            })
+
+        return {"nodes": nodes_out}
+
+    
     async def _campaign_queue_worker(
         self,
         campaign_id: str,

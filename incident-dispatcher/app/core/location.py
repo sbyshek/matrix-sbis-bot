@@ -119,6 +119,8 @@ async def create_event(
     if ttl_minutes > 0:
         await set_event_ttl(loc_id, event_id, ttl_minutes)
 
+    # event_id = await create_event(loc_id, event_type, comment, source)
+
     await save_unified_history(
         loc_id=loc_id,
         loc_name=loc["name"],

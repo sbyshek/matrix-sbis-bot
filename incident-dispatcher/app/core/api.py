@@ -4,10 +4,11 @@ import logging
 import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import httpx
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
-from app.alert_svc import TEMPLATES, TEMPLATES_FILE, get_location_alerts, get_template_by_id, get_all_location_subscribers
+from app.alert_svc import TEMPLATES, TEMPLATES_FILE, get_location_alerts, get_template_by_id, get_all_location_subscribers, create_event_from_template, create_event
 from app.core.config import settings
 from app.core.history import get_unified_history, save_unified_history
 from app.core.matrix import send_alert_to_matrix, send_event_to_matrix, send_matrix_message
@@ -180,6 +181,13 @@ async def trigger_alert_template(
             author_user_id="dashboard_user"
         )
         
+        await create_event_from_template(
+            loc_id,
+            template["id"],
+            "dashboard_user",
+            template.get("name", "")
+        )
+        
         result = await trigger_campaign(
             loc_id=loc_id,
             loc_name=loc_data["name"],
@@ -196,7 +204,7 @@ async def trigger_alert_template(
 
     if campaign_id:
         try:
-            save_campaign_history(campaign_id, result.get("result",{}))
+            await save_campaign_history(campaign_id, result.get("result",{}))
         except Exception as e:
             logger.error(f"❌ Failed to save campaign history: {e}")
     
@@ -298,6 +306,13 @@ async def trigger_bulk_alert(
                 author_user_id="bulk_dispatcher"
             )
             
+            await create_event_from_template(
+                loc_id,
+                template["id"],
+                "bulk_dispatcher",
+                f"{template.get('name', '')} [multichannel]"
+            )
+            
             result = await trigger_campaign(
                 loc_id=loc_id,
                 loc_name=loc_data["name"],
@@ -312,16 +327,11 @@ async def trigger_bulk_alert(
 
             if campaign_id:
                 try:
-                    save_campaign_history(campaign_id, result.get("result",{}))
+                    await save_campaign_history(campaign_id, result.get("result",{}))
                 except Exception as e:
                     logger.error(f"❌ Failed to save campaign history: {e}")
             
-            # await send_alert_to_matrix(
-            #     loc_id=loc_id,
-            #     template_id=template["id"],
-            #     author_user_id="bulk_dispatcher"
-            # )
-
+       
             await save_unified_history(
                 loc_id=loc_id,
                 loc_name=loc_data["name"],
@@ -565,16 +575,7 @@ async def trigger_custom_alert(
 
             loc_data = LOCATIONS[loc_id]
 
-            # Уникальные абоненты по ВСЕМ сценариям локации
-            # seen = {}
-            # for alert in get_location_alerts(loc_id):
-            #     for raw in alert.get("subscribers", []):
-            #         key = str(raw).split(":", 1)[0].strip()
-            #         if key and key not in seen:
-            #             seen[key] = raw
-            # subscribers = list(seen.values())
-
-            
+                
             subscribers = get_all_location_subscribers(loc_id)
 
             if not subscribers:
@@ -594,7 +595,9 @@ async def trigger_custom_alert(
                     )
                     await send_matrix_message(room_id, msg)
 
-        
+            # Создаем событие в локации
+            await create_event(loc_id, "attention", "Тестовое оповещение", "dashboard_user")
+
             
             # 🔥 Через voice-модуль — как все остальные эндпоинты (httpx не нужен)
             result = await trigger_campaign(
@@ -763,6 +766,14 @@ async def trigger_alert_by_code(
         except VoiceAPIError as e:
             return {"loc_id": loc_id, "error": e.detail}
 
+        # 🔥 Создаём событие в локации
+        await create_event_from_template(
+            loc_id,
+            alert["template_id"],
+            f"ivr_{caller}",
+            f"{alert.get('name', '')} (IVR)"
+        )
+
         # Matrix + единая история
         await send_alert_to_matrix(loc_id, alert["template_id"], f"ivr_{caller}")
         await save_unified_history(
@@ -846,3 +857,25 @@ async def list_ivr_codes(
         "codes": codes,
         "duplicates": [x for x in codes if x["duplicate"]]
     }
+    
+    
+@router.get("/api/v1/system/health")
+async def system_health(
+    request: Request,
+    x_local_token: str = Header(default=None, alias="X-Local-Token"),
+    x_api_token: str = Header(default=None, alias="X-API-Token"),
+):
+    """Сводка здоровья телефонии для дашборда (прокси в voice-api)."""
+    require_dispatcher_token(request, x_local_token, x_api_token)
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(
+                f"{settings.VOICE_API_URL}/api/v1/trunks/health",
+                headers={"X-Secret": settings.VOICE_API_SECRET}
+            )
+            voice = r.json() if r.status_code == 200 else None
+    except Exception:
+        voice = None
+
+    return {"voice": voice}

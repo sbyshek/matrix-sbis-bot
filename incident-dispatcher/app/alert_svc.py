@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 import logging
+from typing import Optional
+from app.core.redis import get_state, set_state, get_open_events, create_event
 
 logger = logging.getLogger(__name__)
 
@@ -110,3 +112,35 @@ def get_all_location_subscribers(loc_id: str) -> list:
         for s in a.get("subscribers", []):
             seen.setdefault(str(s).split(":", 1)[0].strip(), s)
     return list(seen.values())
+
+
+async def create_event_from_template(
+    loc_id: str,
+    template_id: str,
+    source: str,
+    comment: str = ""
+) -> Optional[str]:
+    """
+    Создаёт событие в локации на основе шаблона (alarm/attention).
+    Проверяет, что такое событие ещё не открыто (не создаёт дубли).
+    Возвращает event_id или None (если уже существует).
+    """
+    template = get_template_by_id(template_id)
+    if not template:
+        logger.warning(f"Template {template_id} not found, skipping event creation")
+        return None
+
+    severity = template.get("severity", "attention")
+    
+    # Проверяем, что событие такого типа уже не открыто
+    existing_events = await get_open_events(loc_id)
+    for ev in existing_events:
+        if ev.get("type") == severity:
+            # Уже есть открытое событие того же типа — не дублируем
+            logger.info(f"Event {severity} already open in {loc_id}, skipping")
+            return None
+
+    # Создаём событие
+    event_id = await create_event(loc_id, severity, comment, source)
+    logger.info(f"✅ Created {severity} event in {loc_id} from template {template_id}")
+    return event_id

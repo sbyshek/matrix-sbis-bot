@@ -701,3 +701,10 @@ async def get_play_count_api(
 ):
     verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
     return {"number": number, "play_count": get_play_count(number)}
+
+
+@app.get("/api/v1/trunks/health")
+async def trunks_health(x_secret: str = Header(..., alias="X-Secret")):
+    """🩺 Здоровье телефонии для светофора пульта."""
+    verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
+    return await asterisk_manager.get_trunks_health(redis_client)

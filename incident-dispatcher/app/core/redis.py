@@ -1,6 +1,8 @@
 import json
 import logging
 from typing import Optional, Any
+import uuid
+from datetime import datetime
 
 import redis.asyncio as aioredis
 
@@ -93,6 +95,29 @@ async def get_state(loc_id: str) -> dict:
 
     return json.loads(raw)
 
+async def get_open_events(loc_id: str) -> list:
+    """Открытые события локации из состояния Redis."""
+    state = await get_state(loc_id)
+    return state.get("events", [])
+
+
+async def create_event(loc_id: str, severity: str, comment: str, source: str) -> str:
+    """
+    Создаёт событие в состоянии локации (Redis).
+    Возвращает event_id.
+    """
+    state = await get_state(loc_id)
+    event_id = str(uuid.uuid4())[:8]
+    new_event = {
+        "id": event_id,
+        "type": severity,
+        "comment": comment,
+        "timestamp": datetime.now().isoformat(),
+        "source": source
+    }
+    state.setdefault("events", []).append(new_event)
+    await set_state(loc_id, state)
+    return event_id
 
 async def set_state(loc_id: str, state: dict) -> None:
     """

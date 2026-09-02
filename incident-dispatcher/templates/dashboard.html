@@ -306,6 +306,14 @@
     </style>
 </head>
 <body>
+    <div id="system-badge" onclick="openSystemModal()" title="Нажми для подробностей"
+     style="position:fixed;top:12px;left:12px;z-index:500;display:flex;align-items:center;gap:8px;
+            background:#1a1d24;border:2px solid #2f9e44;border-radius:999px;padding:8px 14px;
+            cursor:pointer;font-size:12px;font-weight:700;letter-spacing:1px;box-shadow:0 4px 12px rgba(0,0,0,.4);">
+        <span id="sys-dot" style="width:10px;height:10px;border-radius:50%;background:#2f9e44;box-shadow:0 0 8px #2f9e44;"></span>
+        <span id="sys-text">СИСТЕМА В НОРМЕ</span>
+    </div>
+
     <h1>📡 ДИСПЕТЧЕРСКИЙ ПУЛЬТ</h1>
     
     <!-- Навигация -->
@@ -427,6 +435,10 @@
         let allLocations = [];
         let allTemplates = [];
         let lastDashboardHash = '';
+        let lastDashData = {};
+        let lastHealth = null;
+        let lastProblems = [];
+        
         const expandedScenarios = new Set();
         
         async function apiRequest(url, method, body = null) {
@@ -702,7 +714,7 @@
         async function updateDashboard() {
             try {
                 const data = await apiRequest('dashboard', 'GET');
-
+                lastDashData = data;
 
                 const hash = JSON.stringify(data);
                 if (hash === lastDashboardHash) return;
@@ -807,6 +819,7 @@
                     `;
                     grid.appendChild(card);
                 }
+                refreshSystemBadge();
             } catch (e) {
                 console.error(e);
                 document.getElementById('locations-grid').innerHTML = `<div style="text-align: center; padding: 60px;">Ошибка: ${e.message}</div>`;
@@ -1657,6 +1670,122 @@
             }
         }
 
+
+        // =============================================================================
+        // СИСТЕМНЫЙ СВЕТОФОР + ПАНЕЛЬ ПРОБЛЕМ
+        // =============================================================================
+        async function refreshSystemBadge() {
+            let level = 'ok';
+            const problems = [];
+
+            // ── Локации ──
+            for (const [id, loc] of Object.entries(lastDashData)) {
+                if (loc.mode === 'alarm') {
+                    level = 'crit';
+                    problems.push(`🔴 ${loc.name}: ТРЕВОГА (${loc.events.length} соб.)`);
+                } else if (loc.mode === 'attention') {
+                    if (level !== 'crit') level = 'warn';
+                    problems.push(`🟡 ${loc.name}: ВНИМАНИЕ (${loc.events.length} соб.)`);
+                }
+            }
+
+            // ── Телефония ──
+            try {
+                lastHealth = await apiRequest('v1/system/health', 'GET');
+            } catch (e) {
+                lastHealth = { voice: null };
+            }
+
+            const voice = lastHealth.voice;
+            if (!voice) {
+                level = 'crit';
+                problems.push('🔴 Нет связи с voice-api');
+            } else {
+                (voice.nodes || []).forEach(n => {
+                    if (n.ami !== 'ok') {
+                        level = 'crit';
+                        problems.push(`🔴 ${n.name}: нет связи с Asterisk (AMI)`);
+                    }
+                    (n.trunks || []).forEach(t => {
+                        if (t.status === 'full') {
+                            level = 'crit';
+                            problems.push(`🔴 Транк ${t.name}: ЗАБИТ (${t.active}/${t.max}) — обзвон не пройдёт!`);
+                        }
+                    });
+                });
+            }
+
+            lastProblems = problems;
+
+            const map = {
+                ok:   { c: '#2f9e44', t: 'СИСТЕМА В НОРМЕ' },
+                warn: { c: '#f08c00', t: 'ВНИМАНИЕ' },
+                crit: { c: '#e03131', t: 'КРИТИЧНО' }
+            };
+            const m = map[level];
+            const badge = document.getElementById('system-badge');
+            badge.style.borderColor = m.c;
+            document.getElementById('sys-dot').style.background = m.c;
+            document.getElementById('sys-dot').style.boxShadow = `0 0 8px ${m.c}`;
+            document.getElementById('sys-text').textContent =
+                m.t + (problems.length ? ` • ${problems.length}` : '');
+            document.getElementById('sys-text').style.color = m.c;
+        }
+
+        function openSystemModal() {
+            const overlayId = 'system-modal';
+            document.getElementById(overlayId)?.remove();
+
+            const voice = lastHealth?.voice;
+            let telHtml = '';
+
+            if (!voice) {
+                telHtml = '<div style="color:#ff8787;">Нет связи с voice-api</div>';
+            } else {
+                (voice.nodes || []).forEach(n => {
+                    telHtml += `
+                    <div style="margin-bottom:14px;">
+                        <div style="font-weight:700;margin-bottom:6px;">
+                            ${n.ami === 'ok' ? '🟢' : '🔴'} ${escapeHtml(n.name)} — AMI: ${n.ami === 'ok' ? 'на связи' : 'НЕТ СВЯЗИ'}
+                        </div>`;
+                    (n.trunks || []).forEach(t => {
+                        const icon = t.status === 'full' ? '🔴' : (t.active > 0 ? '🟡' : '🟢');
+                        telHtml += `
+                        <div style="font-size:13px;padding:4px 0 4px 18px;opacity:.9;">
+                            ${icon} Транк <code>${escapeHtml(t.name)}</code>: ${t.active}/${t.max}
+                            ${t.status === 'full' ? '— <strong style="color:#ff8787;">забит, обзвон не пройдёт!</strong>' : ''}
+                        </div>`;
+                    });
+                    telHtml += '</div>';
+                });
+            }
+
+            const probHtml = lastProblems.length
+                ? lastProblems.map(p => `<div style="padding:4px 0;">${escapeHtml(p)}</div>`).join('')
+                : '<div style="opacity:.7;">Проблем не обнаружено ✅</div>';
+
+            const overlay = document.createElement('div');
+            overlay.id = overlayId;
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+            overlay.innerHTML = `
+            <div style="background:#1a1d24;padding:30px;border-radius:16px;max-width:700px;width:100%;max-height:85vh;overflow-y:auto;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <h3>🩺 Состояние системы</h3>
+                    <button onclick="document.getElementById('${overlayId}').remove()"
+                            style="background:#495057;color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;">✕</button>
+                </div>
+                <h4 style="margin:0 0 8px;">⚠️ Проблемы</h4>
+                <div style="background:rgba(0,0,0,.3);border-radius:8px;padding:12px;margin-bottom:18px;font-size:13px;">${probHtml}</div>
+                <h4 style="margin:0 0 8px;">📞 Телефония</h4>
+                <div style="background:rgba(0,0,0,.3);border-radius:8px;padding:12px;">${telHtml}</div>
+                <div style="margin-top:20px;text-align:right;">
+                    <button onclick="document.getElementById('${overlayId}').remove();refreshSystemBadge();"
+                            style="background:#339af0;color:white;border:none;padding:10px 18px;border-radius:6px;cursor:pointer;">🔄 Обновить</button>
+                </div>
+            </div>`;
+            overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+            document.body.appendChild(overlay);
+        }
 
         // Инициализация
         updateDashboard();
