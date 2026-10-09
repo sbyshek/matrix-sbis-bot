@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ИТ-сервисы | ВПК-Ойл{% endblock %}</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+    
+    <style>
+        :root {
+            --vpk-blue-dark: #292A86;
+            --vpk-blue-light: #0E72B9;
+            --vpk-turquoise: #42BEAC;
+            --bg-body: #F4F6F9;
+            --text-main: #333333;
+            --text-muted: #666666;
+            --font-main: 'Inter', sans-serif;
+            --font-headings: 'Montserrat', sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 1rem 5%;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid var(--vpk-turquoise);
+        }
+
+        .logo {
+            font-family: var(--font-headings);
+            font-weight: 800;
+            font-size: 1.5rem;
+            color: var(--vpk-blue-dark);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .logo span { color: var(--vpk-turquoise); }
+
+        .subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-left: 20px;
+        }
+
+        main { flex: 1; width: 100%; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        
+        .footer {
+            background: var(--vpk-blue-dark);
+            color: #fff;
+            padding: 2rem 0;
+            text-align: center;
+            margin-top: auto;
+        }
+        .footer p { opacity: 0.8; font-size: 0.9rem; }
+        .footer a { color: var(--vpk-turquoise); text-decoration: none; }
+
+        .ip-badge {
+            background: rgba(66, 190, 172, 0.1);
+            border: 1px solid var(--vpk-turquoise);
+            color: var(--vpk-blue-dark);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-family: monospace;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="logo">
+            ВПК<span>-</span>ОЙЛ
+        </a>
+        <span class="subtitle">Каталог ИТ-сервисов</span>
+        <div class="ip-badge">IP: {{ client_ip }}</div>
+    </nav>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 ООО "ВПК-Ойл". Все права защищены.</p>
+            <p style="font-size: 0.8rem; margin-top: 0.5rem;">
+                Новосибирская область, рп. Коченево, ул. Промышленная 17
+            </p>
+        </div>
+    </footer>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -15,6 +15,8 @@ ALERT := alert_bot
 CANTEEN := canteen_api
 VOICE := voice-api
 INCIDENT := incident-dispatcher
+IT := it-gate
+ALERT_API := alert_api
 
 # Цвета для вывода
 COLOR_RESET := \033[0m
@@ -146,10 +148,10 @@ restart-alert: ##  Рестарт Alert сервисов
 	$(COMPOSE) restart alert_api alert_bot
 
 logs-alert: ##  Логи Alert сервисов
-	$(COMPOSE) logs -f alert_bot 
+	$(COMPOSE) logs -f alert_bot --tail 30
 
 logs-api: ##  Логи Alert API
-	$(COMPOSE) logs -f alert_api
+	$(COMPOSE) logs -f alert_api --tail 30
 
 # ================= CANTEEN API =================
 
@@ -201,8 +203,11 @@ down-voice: ##  Остановить VOICE сервисы
 restart-voice: ##  Рестарт VOICE сервисов
 	$(COMPOSE) restart ${VOICE}
 
-logs-voice: ##  Логи TASK сервисов
-	$(COMPOSE) logs -f ${VOICE} --tail 30
+logs-voice: ##  Логи VOICE сервисов
+	$(COMPOSE) logs -f ${VOICE} --tail 30 | grep -v "GET /api/v1/campaign/next HTTP/1.1"
+
+# logs-voice_plain: ##  Логи VOICE сервисов
+# 	$(COMPOSE) logs -f ${VOICE} --tail 30 | grep -v "GET /api/v1/campaign/next HTTP/1.1"
 
 shell-voice: ## 🐚 Bash в VOICE
 	$(COMPOSE) exec ${VOICE} bash
@@ -223,7 +228,37 @@ restart-incident: ##  Рестарт VOICE сервисов
 	$(COMPOSE) restart ${INCIDENT}
 
 logs-incident: ##  Логи TASK сервисов
-	$(COMPOSE) logs -f ${INCIDENT} --tail 30
+	$(COMPOSE) logs -f ${INCIDENT} --tail 30 | grep -v -e '"GET /api/dashboard HTTP/1.0" 200 OK' -e 'INFO:security:Dashboard access granted by IP whitelist' -e 'INFO:app.core.security:✅ IP'
+
 
 shell-incident: ## 🐚 Bash в INCIDENT
 	$(COMPOSE) exec ${INCIDENT} bash
+
+# ================= IT GATE =================
+
+build-it: ## 🚀 Собрать IT
+	$(COMPOSE) build ${IT}
+
+up-it: ## 🚀 Запустить IT
+	$(COMPOSE) up -d ${IT}
+
+down-it: ##  Остановить IT сервисы
+	$(COMPOSE) stop ${IT}
+
+restart-it: ##  Рестарт IT сервисов
+	$(COMPOSE) restart ${IT}
+
+logs-it: ##  Логи IT сервисов
+	$(COMPOSE) logs -f ${IT} --tail 30
+
+build_nginx_conf-it: ## Пересборка конфигов nginx
+# 	cd /home/admin710/matrix-sbis-bot/infra/it-gate/
+	pwd
+	./infra/it-gate/generate_nginx_acl.py
+	docker exec ${IT} nginx -t              # проверка синтаксиса
+	docker exec ${IT} nginx -s reload       # применение
+	cd ../..
+	
+
+shell-it: ## 🐚 Bash в INCIDENT
+	$(COMPOSE) exec ${IT} bash

@@ -27,6 +27,8 @@ class Settings(BaseSettings):
 
     MATRIX_HOMESERVER: str = "https://matrix.vpk-oil.ru"
     MATRIX_ACCESS_TOKEN: str
+    # MATRIX_BOT_TOKEN: str = MATRIX_ACCESS_TOKEN
+    
     REDIS_URL: str = "redis://redis:6379/4"
 
     # Дашборд
@@ -57,6 +59,8 @@ class Settings(BaseSettings):
     #
     LOCAL_API_TOKEN: str
     ALLOWED_IPS: str = "127.0.0.1"
+    
+    TRUSTED_PROXY_SUBNETS: str = "172.16.0.0/12"
     
     @property
     def allowed_ips_list(self) -> list[str]:

@@ -1,11 +1,10 @@
 import logging
 import uuid
 from datetime import datetime
-
+from pathlib import Path
 import httpx
 import markdown
 from zoneinfo import ZoneInfo
-
 from app.core.config import settings
 from app.security import LOCATIONS
 from app.alert_svc import TEMPLATES
@@ -198,3 +197,54 @@ async def send_alert_to_matrix(
     message = message.replace("{author}", author_user_id or "система")
 
     return await send_matrix_message(room_id, message)
+
+
+async def upload_matrix_media(path: Path, mimetype: str = "audio/wav") -> str:
+    """Загружает файл в media-репозиторий Matrix, возвращает mxc:// URI."""
+    async with httpx.AsyncClient(timeout=60) as client:
+        r = await client.post(
+            f"{settings.MATRIX_HOMESERVER}/_matrix/media/v3/upload",
+            params={"filename": path.name},
+            headers={
+                "Authorization": f"Bearer {settings.MATRIX_ACCESS_TOKEN}",
+                "Content-Type": mimetype,
+            },
+            content=path.read_bytes(),     # ← тело = байты файла, НЕ multipart!
+        )
+        r.raise_for_status()
+        return r.json()["content_uri"]
+
+
+async def send_matrix_audio(room_id: str, mxc: str, name: str, size: int):
+    """Отправляет m.audio событие в комнату."""
+    txn = uuid.uuid4().hex
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            r = await client.put(
+                # f"{settings.MATRIX_HOMESERVER}/_matrix/client/v3/rooms/{room_id}/send/m.audio/{txn}",
+                f"{settings.MATRIX_HOMESERVER}/_matrix/client/v3/rooms/{room_id}/send/m.room.message/{txn}",  # ← ВОТ ТУТ
+                headers={"Authorization": f"Bearer {settings.MATRIX_ACCESS_TOKEN}"},
+                json={
+                    "msgtype": "m.audio",
+                    "body": f"🔊 Голосовое оповещение: {name}",
+                    "url": mxc,
+                    "info": {"mimetype": "audio/wav", "size": size},
+                    # "org.matrix.msc3245.voice": {},  # помечает как голосовое сообщение
+                    # "org.matrix.msc1767.file": {
+                    #     "url": mxc,
+                    #     "name": name,
+                    #     "media_type": "audio/wav",
+                    #     "size": size
+                    # },
+                    # "org.matrix.msc1767.audio": {
+                    #     "duration": 10000,  # длительность в мс (примерная)
+                    #     "waveform": []       # можно добавить waveform, если есть
+                    # },
+                },
+            )
+            r.raise_for_status()
+            event_id = r.json().get("event_id")
+            logger.info(f"✅ m.audio sent: event_id={event_id}")
+        except httpx.HTTPError as e:
+            logger.error(f"❌ Matrix: failed to send audio: {e}")
+        

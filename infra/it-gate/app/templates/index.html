@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Каталог ИТ-сервисов | ВПК-Ойл{% endblock %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        text-align: center;
+        padding: 60px 20px 40px;
+    }
+
+    .page-header h1 {
+        font-family: var(--font-headings);
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: var(--vpk-blue-dark);
+        margin-bottom: 12px;
+    }
+
+    .page-header p {
+        font-size: 1.1rem;
+        color: var(--text-muted);
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .category {
+        margin-bottom: 60px;
+    }
+
+    .category-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid var(--vpk-turquoise);
+    }
+
+    .category-header h2 {
+        font-family: var(--font-headings);
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--vpk-blue-dark);
+    }
+
+    .category-icon {
+        font-size: 2rem;
+    }
+
+    .services-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 24px;
+    }
+
+    .service-card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border: 2px solid transparent;
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+
+    .service-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        border-color: var(--vpk-turquoise);
+    }
+
+    .service-card-icon {
+        font-size: 2.5rem;
+        margin-bottom: 12px;
+    }
+
+    .service-card h3 {
+        font-family: var(--font-headings);
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--vpk-blue-dark);
+        margin-bottom: 8px;
+    }
+
+    .service-card p {
+        font-size: 0.95rem;
+        color: var(--text-muted);
+        line-height: 1.5;
+        margin-bottom: 16px;
+    }
+
+    .service-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 16px;
+        border-top: 1px solid #e0e0e0;
+    }
+
+    .service-card-link {
+        color: var(--vpk-blue-light);
+        font-weight: 600;
+        font-size: 0.9rem;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .service-card-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.85rem;
+        color: #2f9e44;
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #2f9e44;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+        font-size: 4rem;
+        margin-bottom: 16px;
+        opacity: 0.3;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Каталог ИТ-сервисов</h1>
+    <p>Внутренние системы и инструменты для сотрудников компании</p>
+</div>
+
+<div class="container">
+    {% if not categories %}
+    <div class="empty-state">
+        <div class="empty-state-icon">📭</div>
+        <h2>Нет доступных сервисов</h2>
+        <p>Для вашего IP-адреса нет доступных сервисов</p>
+    </div>
+    {% else %}
+    {% for category in categories %}
+    <section class="category">
+        <div class="category-header">
+            <span class="category-icon">{{ category.icon or '📁' }}</span>
+            <h2>{{ category.name }}</h2>
+        </div>
+        <div class="services-grid">
+            {% for service in category.services %}
+            <a href="/service/{{ service.id }}" class="service-card">
+                <div class="service-card-icon">{{ service.icon or '⚙️' }}</div>
+                <h3>{{ service.name }}</h3>
+                <p>{{ service.description }}</p>
+                <div class="service-card-footer">
+                    <span class="service-card-link">
+                        Подробнее →
+                    </span>
+                    <span class="service-card-status">
+                        <span class="status-dot"></span>
+                        Доступно
+                    </span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+    {% endif %}
+</div>
+{% endblock %}

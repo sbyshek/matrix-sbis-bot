@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block title %}{{ service.name }} | ВПК-Ойл{% endblock %}
+
+{% block extra_css %}
+<style>
+    .service-page {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 60px 20px;
+    }
+
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--vpk-blue-light);
+        text-decoration: none;
+        font-weight: 600;
+        margin-bottom: 32px;
+        font-size: 0.95rem;
+    }
+
+    .back-link:hover {
+        text-decoration: underline;
+    }
+
+    .service-header {
+        margin-bottom: 40px;
+    }
+
+    .service-header-icon {
+        font-size: 4rem;
+        margin-bottom: 16px;
+    }
+
+    .service-header h1 {
+        font-family: var(--font-headings);
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: var(--vpk-blue-dark);
+        margin-bottom: 12px;
+    }
+
+    .service-header p {
+        font-size: 1.1rem;
+        color: var(--text-muted);
+        line-height: 1.6;
+    }
+
+    .service-actions {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 40px;
+        flex-wrap: wrap;
+    }
+
+    .btn {
+        padding: 14px 28px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 1rem;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.3s ease;
+        border: none;
+        cursor: pointer;
+    }
+
+    .btn-primary {
+        background: var(--vpk-blue-light);
+        color: #fff;
+    }
+
+    .btn-primary:hover {
+        background: #0b5e99;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(14, 114, 185, 0.3);
+    }
+
+    .btn-secondary {
+        background: #fff;
+        color: var(--vpk-blue-dark);
+        border: 2px solid var(--vpk-blue-dark);
+    }
+
+    .btn-secondary:hover {
+        background: var(--vpk-blue-dark);
+        color: #fff;
+    }
+
+    .service-info {
+        background: #fff;
+        border-radius: 12px;
+        padding: 32px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        margin-bottom: 32px;
+    }
+
+    .service-info h2 {
+        font-family: var(--font-headings);
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--vpk-blue-dark);
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid var(--vpk-turquoise);
+    }
+
+    .info-row {
+        display: flex;
+        padding: 12px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .info-row:last-child {
+        border-bottom: none;
+    }
+
+    .info-label {
+        font-weight: 600;
+        color: var(--text-muted);
+        min-width: 140px;
+        font-size: 0.9rem;
+    }
+
+    .info-value {
+        flex: 1;
+        color: var(--text-main);
+    }
+
+    .info-value code {
+        background: rgba(0,0,0,0.05);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.9rem;
+    }
+
+    .access-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .access-badge.open {
+        background: rgba(47, 158, 68, 0.1);
+        color: #2f9e44;
+    }
+
+    .access-badge.restricted {
+        background: rgba(14, 114, 185, 0.1);
+        color: var(--vpk-blue-light);
+    }
+
+    .documentation-section {
+        background: #fff;
+        border-radius: 12px;
+        padding: 32px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+
+    .documentation-section h2 {
+        font-family: var(--font-headings);
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--vpk-blue-dark);
+        margin-bottom: 20px;
+    }
+
+    .doc-placeholder {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-muted);
+        background: rgba(0,0,0,0.02);
+        border-radius: 8px;
+    }
+
+    .doc-placeholder-icon {
+        font-size: 3rem;
+        margin-bottom: 12px;
+        opacity: 0.3;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="service-page">
+    <a href="/" class="back-link">← Назад к каталогу</a>
+
+    <div class="service-header">
+        <div class="service-header-icon">{{ service.icon or '⚙️' }}</div>
+        <h1>{{ service.name }}</h1>
+        <p>{{ service.description }}</p>
+    </div>
+
+    <div class="service-actions">
+        <a href="{{ service.url }}" class="btn btn-primary">
+            🚀 Перейти к сервису
+        </a>
+        {% if service.docs_url %}
+        <a href="{{ service.docs_url }}" class="btn btn-secondary">
+            📖 Документация
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="service-info">
+        <h2>Информация о сервисе</h2>
+        
+        <div class="info-row">
+            <span class="info-label">Категория:</span>
+            <span class="info-value">{{ category.name }}</span>
+        </div>
+
+        <div class="info-row">
+            <span class="info-label">Статус:</span>
+            <span class="info-value">
+                {% if service.status == 'active' %}
+                <span style="color: #2f9e44; font-weight: 600;">✅ Активен</span>
+                {% else %}
+                <span style="color: #e03131; font-weight: 600;">⛔ Неактивен</span>
+                {% endif %}
+            </span>
+        </div>
+
+        <div class="info-row">
+            <span class="info-label">Доступ:</span>
+            <span class="info-value">
+                {% if not service.allowed_ips %}
+                <span class="access-badge open">Открытый доступ</span>
+                {% else %}
+                <span class="access-badge restricted">Ограниченный доступ</span>
+                {% endif %}
+            </span>
+        </div>
+
+        {% if service.allowed_ips %}
+        <div class="info-row">
+            <span class="info-label">Разрешённые сети:</span>
+            <span class="info-value">
+                {% for ip in service.allowed_ips %}
+                <code>{{ ip }}</code>{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            </span>
+        </div>
+        {% endif %}
+
+        <div class="info-row">
+            <span class="info-label">Ваш IP:</span>
+            <span class="info-value">
+                <code>{{ client_ip }}</code>
+                {% if client_allowed %}
+                <span style="color: #2f9e44; margin-left: 8px;">✓ Доступ разрешён</span>
+                {% endif %}
+            </span>
+        </div>
+    </div>
+
+    <div class="documentation-section">
+        <h2>📚 Документация</h2>
+        {% if has_docs %}
+        <p style="margin-bottom: 16px; color: var(--text-muted);">
+            Полная документация доступна по ссылке выше.
+        </p>
+        {% else %}
+        <div class="doc-placeholder">
+            <div class="doc-placeholder-icon">📄</div>
+            <p>Документация для этого сервиса пока не добавлена</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

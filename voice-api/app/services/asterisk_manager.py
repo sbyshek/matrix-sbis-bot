@@ -1,3 +1,4 @@
+# app/services/asterisk_manager.py
 """
 Сервис для управления Asterisk через AMI с очередью и retry.
 """
@@ -11,6 +12,7 @@ from app.core.utils import get_play_count
 import redis.asyncio as redis
 import random
 import re
+import time
 from typing import List, Dict, Optional
 from pathlib import Path
 
@@ -101,6 +103,27 @@ class AsteriskManagerService:
             trunk = random.choice(node.external_trunks)
             return f"{trunk}/{number}", "trunk"
     
+    
+    async def _trunk_has_capacity(self, redis_client, node, trunk: str) -> bool:
+        """
+        Есть ли ёмкость на транке.
+        Fail-open: если сверка протухла (>30с) — разрешаем звонок.
+        Источник истины — Астериск, а не наша книга учёта.
+        """
+        ts_raw = await redis_client.get(f"voice:trunk_reconcile:{node.id}")
+        if not ts_raw:
+            return True                      # сверки ещё не было → не блокируем
+
+        loop = asyncio.get_event_loop()
+        age = loop.time() - float(ts_raw)
+        if age > 30:
+            logger.warning(f"⚠️ Reconcile stale ({age:.0f}s) → fail-open for {trunk}")
+            return True                      # данные протухли → шлагбаум ОТКРЫТ
+
+        active = int(await redis_client.get(f"voice:active_trunk:{trunk}") or 0)
+        return active < node.max_concurrent_per_trunk
+    
+    
     async def _get_trunk_load(self, redis_client: redis.Redis, trunk_name: str) -> int:
         """Получить текущую загрузку транка"""
         trunk_key = f"voice:active_trunk:{trunk_name}"
@@ -126,7 +149,8 @@ class AsteriskManagerService:
         target_exten: str = "unknown",
         redis_client: redis.Redis = None,
         campaign_id: str = None,
-        retry_count: int = 0
+        retry_count: int = 0,
+        trunk_override=None
     ) -> dict:
         """Инициировать звонок с поддержкой retry"""
         manager = await self.get_manager(node_id)
@@ -150,8 +174,13 @@ class AsteriskManagerService:
         )
 
         # 🔥 Имя транка считаем ОДИН раз (для внешних) или "internal"
-        trunk_name = dial_string.rsplit("/", 1)[0] if channel_type == "trunk" else "internal"
+        
+        if trunk_override and channel_type == "trunk":
+                dial_string = f"{trunk_override}/{subscriber.number}"
 
+
+        trunk_name = dial_string.rsplit("/", 1)[0] if channel_type == "trunk" else "internal"
+        
         # 🔥 СТРАХОВКА ОТ ДВОЙНОГО ЗВОНКА:
         # один номер не может быть вызван дважды в одной кампании
         if redis_client and campaign_id:
@@ -171,23 +200,25 @@ class AsteriskManagerService:
 
         # Проверка лимита для внешних транков
         if channel_type == "trunk" and redis_client:
+            
             trunk_key = f"voice:active_trunk:{trunk_name}"
             active = await redis_client.get(trunk_key) or 0
             active = int(active)
 
-            if active >= node.max_concurrent_per_trunk:
-                logger.warning(
-                    f"⚠️ Trunk {trunk_name} at max capacity "
-                    f"({active}/{node.max_concurrent_per_trunk})"
-                )
-                return {
-                    "status": "error",
-                    "subscriber": subscriber.display_name,
-                    "error": f"Trunk {trunk_name} at max capacity",
-                    "campaign_id": campaign_id,
-                    "retry_count": retry_count,
-                    "retryable": True
-                }
+            # if not await self._trunk_has_capacity(redis_client, node, trunk_name):
+            #     active = int(await redis_client.get(f"voice:active_trunk:{trunk_name}") or 0)
+            #     logger.warning(
+            #         f"⚠️ Trunk {trunk_name} at max capacity "
+            #         f"({active}/{node.max_concurrent_per_trunk}), queuing call"
+            #     )
+            #     return {
+            #         "status": "error",
+            #         "subscriber": subscriber.display_name,
+            #         "error": f"Trunk {trunk_name} at max capacity",
+            #         "campaign_id": campaign_id,
+            #         "retry_count": retry_count,
+            #         "retryable": True
+            #     }
 
             await redis_client.incr(trunk_key)
             await redis_client.expire(trunk_key, 3600)
@@ -264,11 +295,75 @@ class AsteriskManagerService:
                 "retryable": True
             }
     
+    # async def get_trunks_health(self, redis_client=None) -> dict:
+    #     """
+    #     🩺 Здоровье узлов Asterisk и транков:
+    #     - AMI-пинг по каждому активному узлу
+    #     - занятость транков по счётчикам Redis
+    #     """
+    #     nodes_out = []
+
+    #     for node in asterisk_config.nodes:
+    #         if not node.active:
+    #             continue
+
+    #         # ── AMI ping ──
+    #         ami_ok = True
+    #         try:
+    #             manager = await self.get_manager(node.id)
+    #             await asyncio.wait_for(
+    #                 manager.send_action({'Action': 'Ping'}),
+    #                 timeout=3
+    #             )
+    #         except Exception as e:
+    #             logger.warning(f"⚠️ AMI ping failed for {node.id}: {e}")
+    #             ami_ok = False
+
+    #         # ── Транки ──
+    #         trunks_out = []
+    #         for trunk in node.external_trunks:
+    #             active = 0
+    #             try:
+    #                 if redis_client:
+    #                     active = int(await redis_client.get(f"voice:active_trunk:{trunk}") or 0)
+    #             except Exception:
+    #                 active = -1
+
+    #             trunks_out.append({
+    #                 "name": trunk,
+    #                 "active": active,
+    #                 "max": node.max_concurrent_per_trunk,
+    #                 "status": "full" if active >= node.max_concurrent_per_trunk else "ok"
+    #             })
+
+    #         nodes_out.append({
+    #             "id": node.id,
+    #             "name": node.name,
+    #             "ami": "ok" if ami_ok else "down",
+    #             "trunks": trunks_out
+    #         })
+
+    #     return {"nodes": nodes_out}
+
+    
+    @staticmethod
+    def _sip_peer_state(status: str) -> str:
+        """Нормализация статуса SIP-пира из AMI SIPpeers."""
+        s = (status or "").strip().lower()
+        if not s:
+            return "unknown"
+        if s.startswith("ok") or "registered" in s:
+            return "online"
+        if any(x in s for x in ("unreachable", "unregistered", "rejected", "forbidden", "not exists")):
+            return "offline"
+        return "unknown"
+
     async def get_trunks_health(self, redis_client=None) -> dict:
         """
-        🩺 Здоровье узлов Asterisk и транков:
-        - AMI-пинг по каждому активному узлу
-        - занятость транков по счётчикам Redis
+        🩺 Здоровье узлов и транков:
+        - AMI-пинг
+        - регистрация SIP-пиров транков (CLI sip show peers)
+        - занятость по счётчикам Redis
         """
         nodes_out = []
 
@@ -278,15 +373,40 @@ class AsteriskManagerService:
 
             # ── AMI ping ──
             ami_ok = True
+            manager = None
             try:
                 manager = await self.get_manager(node.id)
-                await asyncio.wait_for(
-                    manager.send_action({'Action': 'Ping'}),
-                    timeout=3
-                )
+                await asyncio.wait_for(manager.send_action({'Action': 'Ping'}), timeout=3)
             except Exception as e:
                 logger.warning(f"⚠️ AMI ping failed for {node.id}: {e}")
                 ami_ok = False
+
+            # ── Статусы SIP-пиров через CLI ──
+            peer_statuses = {}
+            if ami_ok and manager:
+                needed = {
+                    (t.split('/', 1)[1] if t.startswith('SIP/') else t)
+                    for t in node.external_trunks
+                }
+                try:
+                    msg = await asyncio.wait_for(
+                        manager.send_action({'Action': 'Command', 'Command': 'sip show peers'}),
+                        timeout=5
+                    )
+                    out = msg.get('Output') or ''
+                    # 🔥 panoramisk возвращает Output как LIST строк — склеиваем
+                    if isinstance(out, (list, tuple)):
+                        out = '\n'.join(out)
+
+                    for line in str(out).splitlines():
+                        parts = line.split()
+                        if not parts:
+                            continue
+                        name = parts[0].split('/')[0]
+                        if name in needed:
+                            peer_statuses[name] = parts[-1]
+                except Exception as e:
+                    logger.warning(f"⚠️ CLI sip show peers failed for {node.id}: {e}")
 
             # ── Транки ──
             trunks_out = []
@@ -298,11 +418,32 @@ class AsteriskManagerService:
                 except Exception:
                     active = -1
 
+                peer_name = trunk.split('/', 1)[1] if trunk.startswith('SIP/') else trunk
+                raw_status = peer_statuses.get(peer_name, '').lower()
+
+                if 'unreachable' in raw_status or 'unregistered' in raw_status:
+                    reg = 'offline'
+                elif 'ok' in raw_status or 'registered' in raw_status:
+                    reg = 'online'
+                else:
+                    reg = 'unknown'
+
+                if reg == 'offline':
+                    status = 'offline'
+                elif active >= node.max_concurrent_per_trunk:
+                    status = 'full'
+                elif active > 0:
+                    status = 'busy'
+                else:
+                    status = 'ok' if reg == 'online' else 'unknown'
+
                 trunks_out.append({
                     "name": trunk,
                     "active": active,
                     "max": node.max_concurrent_per_trunk,
-                    "status": "full" if active >= node.max_concurrent_per_trunk else "ok"
+                    "registration": reg,
+                    "status": status,
+                    "raw": raw_status
                 })
 
             nodes_out.append({
@@ -313,7 +454,7 @@ class AsteriskManagerService:
             })
 
         return {"nodes": nodes_out}
-
+    
     
     async def _campaign_queue_worker(
         self,
@@ -416,65 +557,119 @@ class AsteriskManagerService:
         
         logger.info(f"✅ Queue worker finished for campaign {campaign_id}")
     
-    async def originate_campaign(
-        self,
-        node_id: str,
-        subscribers: list[Subscriber],
-        audio_file: str,
-        initiator: str = "Voice API",
-        target_exten: str = "unknown",
-        redis_client: redis.Redis = None,
-        campaign_id: str = None
-    ) -> dict:
-        """Запустить кампанию обзвона МАКСИМАЛЬНО ПАРАЛЛЕЛЬНО"""
+    # async def originate_campaign(
+    #     self,
+    #     node_id: str,
+    #     subscribers: list[Subscriber],
+    #     audio_file: str,
+    #     initiator: str = "Voice API",
+    #     target_exten: str = "unknown",
+    #     redis_client: redis.Redis = None,
+    #     campaign_id: str = None
+    # ) -> dict:
+    #     """Запустить кампанию обзвона МАКСИМАЛЬНО ПАРАЛЛЕЛЬНО"""
         
-        # 🔥 ПРАВИЛЬНОЕ получение объекта node
-        node = None
-        for n in asterisk_config.nodes:
-            if n.id == node_id:
-                node = n
-                break
+    #     #######################
+    #     await redis_client.hset(f"voice:campaign:{campaign_id}", mapping={
+    #         "node_id": node_id,
+    #         "audio_file": audio_file,
+    #         "initiator": initiator,
+    #     })
+    #     await redis_client.expire(f"voice:campaign:{campaign_id}", 7200)
+    #     ##########################
         
+    #     # 🔥 ПРАВИЛЬНОЕ получение объекта node
+    #     node = None
+    #     for n in asterisk_config.nodes:
+    #         if n.id == node_id:
+    #             node = n
+    #             break
+        
+    #     if not node:
+    #         logger.error(f"❌ Node '{node_id}' not found in config")
+    #         return {"status": "error", "error": f"Node '{node_id}' not found"}
+        
+    #     # Создаем задачи для всех абонентов
+    #     tasks = []
+    #     for subscriber in subscribers:
+    #         task = asyncio.create_task(
+    #             self.originate_call(
+    #                 node_id=node_id,
+    #                 subscriber=subscriber,
+    #                 audio_file=audio_file,
+    #                 initiator=initiator,
+    #                 target_exten=target_exten,
+    #                 redis_client=redis_client,
+    #                 campaign_id=campaign_id
+    #             )
+    #         )
+    #         tasks.append(task)
+        
+    #     # Ждём завершения всех задач
+    #     results_list = await asyncio.gather(*tasks, return_exceptions=True)
+        
+    #     # Собираем статистику
+    #     results = {"success": 0, "error": 0, "details": []}
+    #     for result in results_list:
+    #         if isinstance(result, Exception):
+    #             results["error"] += 1
+    #             results["details"].append({"status": "error", "error": str(result)})
+    #         elif result.get("status") == "success":
+    #             results["success"] += 1
+    #             results["details"].append(result)
+    #         else:
+    #             results["error"] += 1
+    #             results["details"].append(result)
+        
+    #     logger.info(
+    #         f"📊 Campaign finished: {results['success']} success, "
+    #         f"{results['error']} errors out of {len(subscribers)} subscribers"
+    #     )
+    #     return results
+    
+    
+    async def originate_campaign(self, node_id, subscribers, audio_file,
+                                 initiator="Voice API", target_exten="unknown",
+                                 redis_client=None, campaign_id=None) -> dict:
+        await redis_client.hset(f"voice:campaign:{campaign_id}", mapping={
+            "node_id": node_id, "audio_file": audio_file, "initiator": initiator,
+        })
+        await redis_client.expire(f"voice:campaign:{campaign_id}", 7200)
+
+        node = next((n for n in asterisk_config.nodes if n.id == node_id), None)
         if not node:
-            logger.error(f"❌ Node '{node_id}' not found in config")
             return {"status": "error", "error": f"Node '{node_id}' not found"}
-        
-        # Создаем задачи для всех абонентов
-        tasks = []
+
+        tasks, queued = [], 0
         for subscriber in subscribers:
-            task = asyncio.create_task(
-                self.originate_call(
-                    node_id=node_id,
-                    subscriber=subscriber,
-                    audio_file=audio_file,
-                    initiator=initiator,
-                    target_exten=target_exten,
-                    redis_client=redis_client,
-                    campaign_id=campaign_id
-                )
-            )
-            tasks.append(task)
-        
-        # Ждём завершения всех задач
-        results_list = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Собираем статистику
-        results = {"success": 0, "error": 0, "details": []}
-        for result in results_list:
-            if isinstance(result, Exception):
-                results["error"] += 1
-                results["details"].append({"status": "error", "error": str(result)})
-            elif result.get("status") == "success":
-                results["success"] += 1
-                results["details"].append(result)
+            try:
+                _, ch_type = self.resolve_channel(node, subscriber.number)
+            except ValueError:
+                ch_type = "trunk"
+            if ch_type == "trunk":
+                # 🔥 внешние НЕ шлём залпом — в общую очередь с пейсингом
+                await redis_client.zadd("voice:ext_queue", {json.dumps({
+                    "cid": campaign_id,
+                    "number": subscriber.number,
+                    "name": subscriber.display_name,
+                }): time.time()})
+                queued += 1
             else:
-                results["error"] += 1
-                results["details"].append(result)
-        
-        logger.info(
-            f"📊 Campaign finished: {results['success']} success, "
-            f"{results['error']} errors out of {len(subscribers)} subscribers"
-        )
+                tasks.append(asyncio.create_task(self.originate_call(
+                    node_id=node_id, subscriber=subscriber, audio_file=audio_file,
+                    initiator=initiator, target_exten=target_exten,
+                    redis_client=redis_client, campaign_id=campaign_id)))
+
+        results_list = await asyncio.gather(*tasks, return_exceptions=True) if tasks else []
+        results = {"success": queued, "error": 0, "queued_external": queued, "details": []}
+        for r in results_list:
+            if isinstance(r, Exception):
+                results["error"] += 1; results["details"].append({"status": "error", "error": str(r)})
+            elif r.get("status") == "success":
+                results["success"] += 1; results["details"].append(r)
+            else:
+                results["error"] += 1; results["details"].append(r)
+        logger.info(f"📊 Campaign {campaign_id[:8]}: internals done, external queued={queued}")
         return results
     
     async def get_campaign_status(self, campaign_id: str, redis_client: redis.Redis) -> dict:
@@ -491,6 +686,46 @@ class AsteriskManagerService:
             "retrying": retry_len,
             "worker_active": campaign_id in self.active_workers
         }
+        
+    async def reconcile_trunk_counters(self, redis_client) -> int:
+        """
+        🔥 Источник истины — живые каналы Asterisk.
+        Перезаписываем счётчики фактическим количеством каналов на транк.
+        Залипание становится невозможным дольше цикла сверки.
+        """
+        updated = 0
+        for node in asterisk_config.nodes:
+            if not node.active:
+                continue
+            try:
+                manager = await self.get_manager(node.id)
+                msg = await asyncio.wait_for(
+                    manager.send_action({'Action': 'Command',
+                                        'Command': 'core show channels concise'}),
+                    timeout=5
+                )
+                out = msg.get('Output') or ''
+                if isinstance(out, (list, tuple)):
+                    out = '\n'.join(out)
+
+                counts = {t: 0 for t in node.external_trunks}
+                for line in out.splitlines():
+                    chan = line.split('|')[0].strip() if '|' in line else (line.split() or [''])[0]
+                    for trunk in counts:
+                        # каналы вида SIP/rt_3049616-0005027c
+                        if chan.startswith(trunk + '-') or chan.startswith(trunk + '/'):
+                            counts[trunk] += 1
+                            break
+
+                for trunk, cnt in counts.items():
+                    await redis_client.set(f"voice:active_trunk:{trunk}", cnt)
+                    updated += 1
+
+                await redis_client.set(f"voice:trunk_reconcile:{node.id}",
+                                    str(int(asyncio.get_event_loop().time())))
+            except Exception as e:
+                logger.warning(f"⚠️ Trunk reconcile failed for {node.id}: {e}")
+        return updated
 
 # Глобальный инстанс
 asterisk_manager = AsteriskManagerService()

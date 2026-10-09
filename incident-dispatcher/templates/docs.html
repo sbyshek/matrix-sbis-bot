@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}{{ service.name }} — Документация | ВПК-Ойл{% endblock %}
+
+{% block extra_css %}
+<style>
+    .docs-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 40px;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+
+    .docs-sidebar {
+        background: #fff;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        height: fit-content;
+        position: sticky;
+        top: 100px;
+    }
+
+    .docs-sidebar h3 {
+        font-family: var(--font-headings);
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--vpk-blue-dark);
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid var(--vpk-turquoise);
+    }
+
+    .docs-nav {
+        list-style: none;
+    }
+
+    .docs-nav li {
+        margin-bottom: 8px;
+    }
+
+    .docs-nav a {
+        display: block;
+        padding: 8px 12px;
+        border-radius: 6px;
+        text-decoration: none;
+        color: var(--text-main);
+        font-size: 0.9rem;
+        transition: all 0.2s;
+    }
+
+    .docs-nav a:hover {
+        background: rgba(66, 190, 172, 0.1);
+        color: var(--vpk-blue-light);
+    }
+
+    .docs-nav a.active {
+        background: var(--vpk-turquoise);
+        color: #fff;
+        font-weight: 600;
+    }
+
+    .docs-content {
+        background: #fff;
+        border-radius: 12px;
+        padding: 40px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+
+    .docs-content h1 {
+        font-family: var(--font-headings);
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: var(--vpk-blue-dark);
+        margin-bottom: 24px;
+        padding-bottom: 16px;
+        border-bottom: 3px solid var(--vpk-turquoise);
+    }
+
+    .docs-content h2 {
+        font-family: var(--font-headings);
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--vpk-blue-dark);
+        margin-top: 32px;
+        margin-bottom: 16px;
+    }
+
+    .docs-content h3 {
+        font-family: var(--font-headings);
+        font-size: 1.4rem;
+        font-weight: 600;
+        color: var(--vpk-blue-dark);
+        margin-top: 24px;
+        margin-bottom: 12px;
+    }
+
+    .docs-content p {
+        line-height: 1.8;
+        margin-bottom: 16px;
+    }
+
+    .docs-content code {
+        background: rgba(0,0,0,0.05);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9rem;
+    }
+
+    .docs-content pre {
+        background: #1a1d24;
+        color: #e1e7ef;
+        padding: 20px;
+        border-radius: 8px;
+        overflow-x: auto;
+        margin: 20px 0;
+    }
+
+    .docs-content pre code {
+        background: none;
+        padding: 0;
+        color: inherit;
+    }
+
+    .docs-content img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        margin: 20px 0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .docs-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+    }
+
+    .docs-content th,
+    .docs-content td {
+        padding: 12px;
+        border: 1px solid #e0e0e0;
+        text-align: left;
+    }
+
+    .docs-content th {
+        background: rgba(66, 190, 172, 0.1);
+        font-weight: 600;
+    }
+
+    .docs-content a {
+        color: var(--vpk-blue-light);
+        text-decoration: none;
+    }
+
+    .docs-content a:hover {
+        text-decoration: underline;
+    }
+
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--vpk-blue-light);
+        text-decoration: none;
+        font-weight: 600;
+        margin-bottom: 24px;
+    }
+
+    .back-link:hover {
+        text-decoration: underline;
+    }
+
+    @media (max-width: 768px) {
+        .docs-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .docs-sidebar {
+            position: static;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="docs-layout">
+    <!-- Боковая навигация -->
+    <aside class="docs-sidebar">
+        <h3>{{ service.name }}</h3>
+        <ul class="docs-nav">
+            {% for p in pages %}
+            <li>
+                <a href="/docs/{{ service.id }}/{{ p.slug }}" class="{{ 'active' if p.active else '' }}">
+                    {{ p.title }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0;">
+            <a href="/service/{{ service.id }}" class="back-link">← К сервису</a>
+        </div>
+    </aside>
+
+    <!-- Основной контент -->
+    <main class="docs-content">
+        {{ content | safe }}
+    </main>
+</div>
+{% endblock %}

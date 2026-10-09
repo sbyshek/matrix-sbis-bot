@@ -269,6 +269,31 @@ services:
         max-file: "5"
         compress: "true"
 
+  it-gate:
+    build: ./infra/it-gate
+    container_name: it-gate
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/it-gate/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./infra/it-gate/ssl:/etc/nginx/ssl:ro
+      - ./infra/it-gate/app:/app:ro
+      - ./infra/it-gate/docs:/docs:ro
+    networks:
+      - matrix-net
+    command: >
+      sh -c "
+        python3 /app/generate_nginx_acl.py &&
+        nginx -g 'daemon off;'
+      "
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+        compress: "true"
 
 networks:
   matrix-net:

@@ -364,9 +364,23 @@
 
         <div id="custom-container" class="bulk-container" style="display: none;">
             <div class="bulk-step">
-                <h3>1. Надиктуйте сообщение</h3>
-                <div style="display: flex; gap: 12px; align-items: center;">
+                <h3>1. Подготовьте сообщение</h3>
+
+                <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
+                    <span style="font-size:13px;opacity:.7;">♻️ Или ранее записанное:</span>
+                    <select id="customAudioSelect" onchange="onCustomAudioSelect()"
+                        style="flex:1;padding:10px;border-radius:8px;border:1px solid #2c3440;background:#15191e;color:#fff;font-size:13px;">
+                        <option value="">🎙️ Новая запись</option>
+                    </select>
+                </div>    
+
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                     <button id="recBtn" class="btn" style="background: #e03131; flex: 0 0 170px;" onclick="toggleRecording()">🎙️ Записать</button>
+                    <label class="btn" style="background: #339af0; flex: 0 0 170px; cursor: pointer;">
+                        📤 Загрузить файл
+                        <input type="file" id="customFileInput" accept=".wav,.mp3,.ogg,.webm,.m4a,.flac" style="display: none;" onchange="uploadCustomFile()">
+                    </label>
+                    <button id="cancelCustomBtn" class="btn" style="background: #495057; flex: 0 0 120px; display: none;" onclick="cancelCustomAlert()">❌ Отмена</button>
                     <span id="recStatus" style="opacity: 0.7; font-size: 13px;"></span>
                 </div>
                 <audio id="customAudioPlayer" controls style="display: none; width: 100%; margin-top: 14px;"></audio>
@@ -380,6 +394,11 @@
                 <h3>2. Текст в Matrix (необязательно)</h3>
                 <input id="customMatrixText" placeholder="🔔 Тестовое оповещение: проверка связи"
                     style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #2c3440; background: #15191e; color: #fff; font-size: 14px;">
+
+                <label style="display:flex;align-items:center;gap:10px;margin-top:12px;cursor:pointer;font-size:14px;">
+                    <input type="checkbox" id="customSendVoice" style="width:18px;height:18px;">
+                    🎧 Отправить звуковое сообщение в Matrix-комнаты выбранных локаций
+                </label>
             </div>
 
             <div class="bulk-step">
@@ -388,7 +407,7 @@
             </div>
 
             <button id="customLaunchBtn" class="bulk-launch-btn" onclick="launchCustomAlert()">
-                🚀 ЗАПУСТИТЬ ТЕСТОВОЕ ОПОВЕЩЕНИЕ
+                🚀 ЗАПУСТИТЬ СПЕЦИАЛЬНОЕ ОПОВЕЩЕНИЕ
             </button>
         </div>
 
@@ -438,6 +457,8 @@
         let lastDashData = {};
         let lastHealth = null;
         let lastProblems = [];
+        let matrixStatus = null;
+        let selectedExistingAudio = null;
         
         const expandedScenarios = new Set();
         
@@ -1376,7 +1397,7 @@
             document.querySelector('#alerts .bulk-container').style.display = mode === 'template' ? 'block' : 'none';
             document.getElementById('custom-container').style.display = mode === 'custom' ? 'block' : 'none';
 
-            if (mode === 'custom') renderCustomLocations();
+            if (mode === 'custom') {renderCustomLocations(); loadCustomAudioSelect();}
         }
 
         async function toggleRecording() {
@@ -1409,6 +1430,12 @@
                     document.getElementById('recBtn').textContent = '🎙️ Перезаписать';
                     document.getElementById('recBtn').style.background = '#e03131';
                     document.getElementById('recStatus').textContent = `✅ Записано: ${recSeconds} сек`;
+                    document.getElementById('cancelCustomBtn').style.display = 'inline-block'; 
+
+                    ////
+                    document.getElementById('customAudioSelect').value = '';
+                    selectedExistingAudio = null;
+                    ////
                 };
 
                 mediaRecorder.start();
@@ -1452,64 +1479,66 @@
         }
 
         async function launchCustomAlert() {
-            if (!recordedBlob) { alert('Сначала запишите сообщение 🎙️'); return; }
+            const useExisting = !!selectedExistingAudio;
+            if (!recordedBlob && !useExisting) {
+                alert('Сначала запишите сообщение 🎙️ или выберите существующее ♻️');
+                return;
+            }
             if (!customLocations.size) { alert('Выберите локации'); return; }
-            if (!confirm(`Запустить ТЕСТОВОЕ оповещение на ${customLocations.size} локациях?`)) return;
+            if (!confirm(`Запустить СПЕЦИАЛЬНОЕ оповещение на ${customLocations.size} локациях?`)) return;
 
             const btn = document.getElementById('customLaunchBtn');
             btn.disabled = true;
-
             try {
-                // 1. Загрузка + конвертация на диспетчере
-                btn.textContent = '⏳ Загрузка и конвертация...';
-                const fd = new FormData();
-                fd.append('file', recordedBlob, 'custom_test.webm');
+                let audio_file = selectedExistingAudio;
 
-                const up = await fetch(`${API_BASE}/v1/audio/upload`, {
-                    method: 'POST',
-                    headers: { 'X-API-Token': DASHBOARD_TOKEN },
-                    body: fd
-                });
+                if (!audio_file) {
+                    // 1. Загрузка + конвертация на диспетчере
+                    btn.textContent = '⏳ Загрузка и конвертация...';
+                    const fd = new FormData();
+                    fd.append('file', recordedBlob, 'custom_test.webm');
+                    const up = await fetch(`${API_BASE}/v1/audio/upload`, {
+                        method: 'POST',
+                        headers: { 'X-API-Token': DASHBOARD_TOKEN },
+                        body: fd
+                    });
+                    if (!up.ok) {
+                        const err = await up.json().catch(() => ({ detail: 'Ошибка загрузки' }));
+                        throw new Error(err.detail);
+                    }
+                    audio_file = (await up.json()).audio_file;
 
-                if (!up.ok) {
-                    const err = await up.json().catch(() => ({ detail: 'Ошибка загрузки' }));
-                    throw new Error(err.detail);
+                    // предпрослушивание сконвертированного
+                    try {
+                        const prev = await fetch(`${API_BASE}/v1/audio/${audio_file}.wav`, {
+                            headers: { 'X-API-Token': DASHBOARD_TOKEN }
+                        });
+                        if (prev.ok) {
+                            const blob = await prev.blob();
+                            document.getElementById('customAudioPlayerConverted').src = URL.createObjectURL(blob);
+                            document.getElementById('convertedPreview').style.display = 'block';
+                        }
+                    } catch (e) { /* не критично */ }
                 }
 
-                const { audio_file } = await up.json();
-
-                // 2. Предпрослушивание «как услышит Астериск»
-                try {
-                    const prev = await fetch(`${API_BASE}/v1/audio/${audio_file}.wav`, {
-                        headers: { 'X-API-Token': DASHBOARD_TOKEN }
-                    });
-                    if (prev.ok) {
-                        const blob = await prev.blob();
-                        const convPlayer = document.getElementById('customAudioPlayerConverted');
-                        convPlayer.src = URL.createObjectURL(blob);
-                        document.getElementById('convertedPreview').style.display = 'block';
-                    }
-                } catch (e) { /* предпрослушивание не критично */ }
-
-                // 3. Запуск обзвона
+                // 2. Запуск обзвона (+ опционально голос в Matrix)
                 btn.textContent = '⏳ Запуск обзвона...';
                 const res = await apiRequest('v1/alert/trigger-custom', 'POST', {
                     audio_file: audio_file,
                     loc_ids: Array.from(customLocations),
-                    text_for_matrix: document.getElementById('customMatrixText').value.trim()
+                    text_for_matrix: document.getElementById('customMatrixText').value.trim(),
+                    send_voice: document.getElementById('customSendVoice').checked
                 });
-
                 alert(
-                    `✅ Тестовое оповещение запущено!\n\n` +
-                    `Успешно: ${res.success.length}\nНе удалось: ${res.failed.length}\n\n` +
+                    `✅ Тестовое оповещение запущено!\n` +
+                    `Успешно: ${res.success.length}\nНе удалось: ${res.failed.length}\n` +
                     `Файл: ${audio_file}\nПодробности — в «Детали» истории.`
                 );
-
             } catch (e) {
                 alert('❌ Ошибка: ' + e.message);
             } finally {
                 btn.disabled = false;
-                btn.textContent = '🚀 ЗАПУСТИТЬ ТЕСТОВОЕ ОПОВЕЩЕНИЕ';
+                btn.textContent = '🚀 ЗАПУСТИТЬ СПЕЦИАЛЬНОЕ ОПОВЕЩЕНИЕ';
             }
         }
 
@@ -1707,14 +1736,30 @@
                         problems.push(`🔴 ${n.name}: нет связи с Asterisk (AMI)`);
                     }
                     (n.trunks || []).forEach(t => {
-                        if (t.status === 'full') {
+                        if (t.status === 'offline') {
+                            level = 'crit';
+                            problems.push(`🔴 Транк ${t.name}: НЕТ РЕГИСТРАЦИИ у провайдера — внешние звонки не пройдут!`);
+                        } else if (t.status === 'full') {
                             level = 'crit';
                             problems.push(`🔴 Транк ${t.name}: ЗАБИТ (${t.active}/${t.max}) — обзвон не пройдёт!`);
                         }
                     });
                 });
             }
+    
+            // ── Matrix ──
+            
+            try {
+                matrixStatus = await apiRequest('v1/matrix/health', 'GET');
+            } catch (e) {
+                matrixStatus = { status: 'down', reason: 'API error' };
+            }
 
+            if (matrixStatus.status !== 'ok') {
+                level = 'crit';
+                problems.push(`🔴 Matrix-бот: ${matrixStatus.reason} — текстовые уведомления в комнатах НЕ работают!`);
+            }
+    
             lastProblems = problems;
 
             const map = {
@@ -1738,6 +1783,19 @@
 
             const voice = lastHealth?.voice;
             let telHtml = '';
+            
+            const matrixHtml = matrixStatus.status === 'ok'
+                ? `<div style="color:#51cf66;">✅ ${escapeHtml(matrixStatus.user_id || 'online')}</div>`
+                : `<div style="color:#ff8787;">⛔ ${escapeHtml(matrixStatus.reason || 'down')}</div>`;
+
+            const matrixBlock = `
+            <div style="margin-top:14px;">
+                <div style="font-weight:700;margin-bottom:6px;">💬 Matrix</div>
+                <div style="font-size:13px;padding:4px 0 4px 18px;">
+                    Homeserver: <code>${escapeHtml(matrixStatus.homeserver || '—')}</code><br>
+                    Бот: ${matrixHtml}
+                </div>
+            </div>`;
 
             if (!voice) {
                 telHtml = '<div style="color:#ff8787;">Нет связи с voice-api</div>';
@@ -1749,13 +1807,16 @@
                             ${n.ami === 'ok' ? '🟢' : '🔴'} ${escapeHtml(n.name)} — AMI: ${n.ami === 'ok' ? 'на связи' : 'НЕТ СВЯЗИ'}
                         </div>`;
                     (n.trunks || []).forEach(t => {
-                        const icon = t.status === 'full' ? '🔴' : (t.active > 0 ? '🟡' : '🟢');
+                        const icon = t.status === 'offline' ? '⛔' : (t.status === 'full' ? '🔴' : (t.active > 0 ? '🟡' : '🟢'));
                         telHtml += `
                         <div style="font-size:13px;padding:4px 0 4px 18px;opacity:.9;">
                             ${icon} Транк <code>${escapeHtml(t.name)}</code>: ${t.active}/${t.max}
-                            ${t.status === 'full' ? '— <strong style="color:#ff8787;">забит, обзвон не пройдёт!</strong>' : ''}
+                            ${t.status === 'offline' ? '— <strong style="color:#ff8787;">НЕТ РЕГИСТРАЦИИ!</strong>' : ''}
+                            ${t.status === 'full' ? '— <strong style="color:#ff8787;">забит!</strong>' : ''}
                         </div>`;
                     });
+                    
+
                     telHtml += '</div>';
                 });
             }
@@ -1777,7 +1838,10 @@
                 <h4 style="margin:0 0 8px;">⚠️ Проблемы</h4>
                 <div style="background:rgba(0,0,0,.3);border-radius:8px;padding:12px;margin-bottom:18px;font-size:13px;">${probHtml}</div>
                 <h4 style="margin:0 0 8px;">📞 Телефония</h4>
-                <div style="background:rgba(0,0,0,.3);border-radius:8px;padding:12px;">${telHtml}</div>
+                <div style="background:rgba(0,0,0,.3);border-radius:8px;padding:12px;">
+                    ${telHtml}
+                    ${matrixBlock}
+                </div>
                 <div style="margin-top:20px;text-align:right;">
                     <button onclick="document.getElementById('${overlayId}').remove();refreshSystemBadge();"
                             style="background:#339af0;color:white;border:none;padding:10px 18px;border-radius:6px;cursor:pointer;">🔄 Обновить</button>
@@ -1785,6 +1849,134 @@
             </div>`;
             overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
             document.body.appendChild(overlay);
+        }
+
+        // =============================================================================
+        // ЗАГРУЗКА ГОТОВОГО ФАЙЛА ДЛЯ ТЕСТОВОГО ОПОВЕЩЕНИЯ
+        // =============================================================================
+        async function uploadCustomFile() {
+            const input = document.getElementById('customFileInput');
+            if (!input.files.length) return;
+
+            const file = input.files[0];
+            document.getElementById('recStatus').textContent = `⏳ Загрузка ${file.name}...`;
+
+            try {
+                const fd = new FormData();
+                fd.append('file', file);
+
+                const up = await fetch(`${API_BASE}/v1/audio/upload`, {
+                    method: 'POST',
+                    headers: { 'X-API-Token': DASHBOARD_TOKEN },
+                    body: fd
+                });
+
+                if (!up.ok) {
+                    const err = await up.json().catch(() => ({ detail: 'Ошибка загрузки' }));
+                    throw new Error(err.detail);
+                }
+
+                const { audio_file } = await up.json();
+
+                // Сохраняем как recordedBlob (для launchCustomAlert)
+                recordedBlob = file;
+                document.getElementById('recBtn').textContent = '🎙️ Перезаписать';
+                document.getElementById('recBtn').style.background = '#e03131';
+                document.getElementById('cancelCustomBtn').style.display = 'inline-block';
+                document.getElementById('recStatus').textContent = `✅ Загружено: ${audio_file}`;
+
+                // Предпрослушивание сконвертированного
+                try {
+                    const prev = await fetch(`${API_BASE}/v1/audio/${audio_file}.wav`, {
+                        headers: { 'X-API-Token': DASHBOARD_TOKEN }
+                    });
+                    if (prev.ok) {
+                        const blob = await prev.blob();
+                        const convPlayer = document.getElementById('customAudioPlayerConverted');
+                        convPlayer.src = URL.createObjectURL(blob);
+                        document.getElementById('convertedPreview').style.display = 'block';
+                    }
+                } catch (e) { /* не критично */ }
+
+            } catch (e) {
+                alert('❌ ' + e.message);
+                document.getElementById('recStatus').textContent = '';
+            }
+
+            input.value = '';
+        }
+
+        // =============================================================================
+        // ОТМЕНА: СБРОС СОСТОЯНИЯ ТЕСТОВОГО ОПОВЕЩЕНИЯ
+        // =============================================================================
+        function cancelCustomAlert() {
+            // Останавливаем запись, если идёт
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+            clearInterval(recTimer);
+
+            // Сбрасываем все переменные
+            mediaRecorder = null;
+            recordedChunks = [];
+            recordedBlob = null;
+            recSeconds = 0;
+            customLocations.clear();
+
+            // Сбрасываем UI
+            document.getElementById('recBtn').textContent = '🎙️ Записать';
+            document.getElementById('recBtn').style.background = '#e03131';
+            document.getElementById('recStatus').textContent = '';
+            document.getElementById('customAudioPlayer').style.display = 'none';
+            document.getElementById('customAudioPlayer').src = '';
+            document.getElementById('convertedPreview').style.display = 'none';
+            document.getElementById('customAudioPlayerConverted').src = '';
+            document.getElementById('customMatrixText').value = '';
+            document.getElementById('cancelCustomBtn').style.display = 'none';
+
+            // Сбрасываем чекбоксы локаций
+            renderCustomLocations();
+
+            alert('✅ Состояние сброшено');
+        }
+        
+        
+        // =============================================================================
+        // ЗАГРУЗКА АУДИО ИЗ СПИСКА ИМЕЮЩИХСЯ
+        // =============================================================================
+        
+
+        async function loadCustomAudioSelect() {
+            try {
+                const res = await apiRequest('v1/audio/list', 'GET');
+                const sel = document.getElementById('customAudioSelect');
+                sel.innerHTML = '<option value="">🎙️ Новая запись</option>' +
+                    (res.files || []).map(f =>
+                        `<option value="${escapeHtml(f.audio_file)}">🎧 ${escapeHtml(f.filename)}</option>`
+                    ).join('');
+                sel.value = selectedExistingAudio || '';
+            } catch (e) { console.error(e); }
+        }
+
+        function onCustomAudioSelect() {
+            const v = document.getElementById('customAudioSelect').value;
+            selectedExistingAudio = v || null;
+            const player = document.getElementById('customAudioPlayer');
+            if (selectedExistingAudio) {
+                // предпрослушивание «как услышит Астериск»
+                fetch(`${API_BASE}/v1/audio/${selectedExistingAudio}.wav`, {
+                    headers: { 'X-API-Token': DASHBOARD_TOKEN }
+                }).then(r => r.ok ? r.blob() : Promise.reject(new Error('файл недоступен')))
+                .then(b => {
+                    player.src = URL.createObjectURL(b);
+                    player.style.display = 'block';
+                }).catch(e => alert('❌ ' + e.message));
+                document.getElementById('recStatus').textContent = '♻️ Будет отправлен существующий файл';
+                document.getElementById('convertedPreview').style.display = 'none';
+            } else {
+                player.style.display = recordedBlob ? 'block' : 'none';
+                document.getElementById('recStatus').textContent = '';
+            }
         }
 
         // Инициализация

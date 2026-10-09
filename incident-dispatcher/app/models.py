@@ -42,6 +42,7 @@ class DeskAlertTriggerRequest(BaseModel):
     
 class CustomAlertTriggerRequest(BaseModel):
     audio_file: str
+    send_voice: bool
     loc_ids: List[str]
     text_for_matrix: str = ""
 

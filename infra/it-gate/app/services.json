@@ -1,0 +1,109 @@
+{
+  "categories": [
+    {
+      "id": "security",
+      "name": " Безопасность",
+      "icon": "🛡️",
+      "services": [
+        {
+          "id": "incident-dashboard",
+          "name": "Диспетчер инцидентов",
+          "icon": "🚨",
+          "description": "Оповещения, голосовой обзвон, история событий",
+          "url": "/incident-dashboard/",
+          "docs_url": "/docs/incident-dashboard/",
+          "upstream": "http://172.17.20.89:8770", 
+          "websocket": true,
+          "allowed_ips": ["192.168.168.58", "172.17.15.0/24", "192.168.149.41/32", "172.16.15.0/24"],
+          "status": "active"
+        },
+        {
+          "id": "access-control",
+          "name": "Пропускная система",
+          "icon": "🔑",
+          "description": "Контроль доступа транспорта на территорию",
+          "url": "/access-control/",
+          "docs_url": "/docs/access-control/",
+          "upstream": "http://172.17.20.58:8080/bureau/list",
+          "websocket": true,
+          "allowed_ips": ["192.168.168.58","172.17.15.0/24","172.16.15.0/24"],
+          "status": "active"
+        },
+        {
+          "id": "bpla",
+          "name": "Консоль БПЛА",
+          "icon": "✈",
+          "description": "Сервер управления системы противодействия БПЛА",
+          "url": "/bpla/",
+          "docs_url": "/docs/bpla/",
+          "upstream": "http://172.17.80.10/#",
+          "websocket": true,
+          "allowed_ips": ["192.168.168.58","172.17.15.15"],
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "id": "logistics",
+      "name": " Логистика",
+      "icon": "🚚",
+      "services": [
+        {
+          "id": "e-queue-loading",
+          "name": "Электронная очередь. Погрузка",
+          "icon": "🚚",
+          "description": "Управление очередью на погрузку (дизель)",
+          "url": "/e-queue-loading/",
+          "docs_url": "/docs/e-queue-loading/",
+          "upstream": "http://172.17.20.89:8003/admin/dashboard",
+          "websocket": true,
+          "allowed_ips": ["192.168.168.58","172.17.15.0/24","172.16.15.0/24"],
+          "status": "active"
+        },
+        {
+          "id": "e-queue-unloading",
+          "name": "Электронная очередь. Рагрузка",
+          "icon": "🚛",
+          "description": "Управление очередью на рагрузку (нефть)",
+          "url": "/e-queue-unloading/",
+          "docs_url": "/docs/e-queue-unloading/",
+          "upstream": "http://172.17.20.69:8123/html/queue/dashboard",
+          "websocket": true,
+          "allowed_ips": ["192.168.168.0/24"],
+          "status": "active"
+        },
+        {
+          "id": "tenzo-m",
+          "name": "Весовой комплекс Тензо-M (битум)",
+          "icon": "⚖",
+          "description": "Управление весовым комплесом Тензо-M на битумном терминале",
+          "url": "/tenzo-m/",
+          "docs_url": "/docs/tenzo-m/",
+          "upstream": "http://172.17.20.69:8000/dashboard",
+          "websocket": true,
+          "allowed_ips": ["192.168.168.58","172.16.15.0/24","172.17.15.0/24"],
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "id": "general",
+      "name": " Общие",
+      "icon": "🔧",
+      "services": [
+        {
+          "id": "employee-search",
+          "name": "Поиск сотрудников",
+          "icon": "👨‍💻",
+          "description": "Справочник контактов и должностей",
+          "url": "/employee-search/",
+          "docs_url": "/docs/employee-search/",
+          "upstream": "http://172.17.20.69:8136/html/search/?q",
+          "websocket": true,
+          "allowed_ips": [],
+          "status": "active"
+        }
+      ]
+    }
+  ]
+}

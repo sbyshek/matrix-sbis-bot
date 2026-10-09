@@ -10,8 +10,9 @@ from fastapi import APIRouter, Header, HTTPException, Request
 
 from app.alert_svc import TEMPLATES, TEMPLATES_FILE, get_location_alerts, get_template_by_id, get_all_location_subscribers, create_event_from_template, create_event
 from app.core.config import settings
+from app.core.audio import AUDIO_DIR
 from app.core.history import get_unified_history, save_unified_history
-from app.core.matrix import send_alert_to_matrix, send_event_to_matrix, send_matrix_message
+from app.core.matrix import send_alert_to_matrix, send_event_to_matrix, send_matrix_message, send_matrix_audio, upload_matrix_media
 from app.core.redis import get_state, set_state, save_campaign_history, get_campaign_history, get_redis
 from app.core.security import verify_ip, verify_local_token
 from app.core.voice import VoiceAPIError, get_campaign_logs, get_campaigns_list, trigger_campaign
@@ -589,14 +590,31 @@ async def trigger_custom_alert(
                     tz = ZoneInfo(settings.TIMEZONE)
                     time_str = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
                     msg = (
-                        f"🎙️ **{loc_data['name']}: ТЕСТОВОЕ ОПОВЕЩЕНИЕ**\n"
+                        f"🎙️ **{loc_data['name']}: СПЕЦИАЛЬНОЕ ОПОВЕЩЕНИЕ**\n"
                         f"{request_data.text_for_matrix}\n"
                         f"Время: {time_str}"
                     )
                     await send_matrix_message(room_id, msg)
+                    
+            if request_data.send_voice:
+                wav = AUDIO_DIR / f"{request_data.audio_file}.wav"
+                if wav.exists():
+                    try:
+                        mxc = await upload_matrix_media(wav)   # грузим ОДИН раз
+                        for loc_id in request_data.loc_ids:
+                            room_id = LOCATIONS[loc_id]["room_id"]
+                            try:
+                                await send_matrix_audio(room_id, mxc, wav.name, wav.stat().st_size)
+                                logger.info(f"🎧 Voice message sent to {loc_id}")
+                            except Exception as e:
+                                logger.error(f"❌ m.audio to {loc_id} failed: {e}")
+                    except Exception as e:
+                        logger.error(f"❌ Matrix media upload failed: {e}")
+                else:
+                    logger.warning(f"⚠️ WAV not found for voice message: {wav}")
 
             # Создаем событие в локации
-            await create_event(loc_id, "attention", "Тестовое оповещение", "dashboard_user")
+            await create_event(loc_id, "attention", "Специальное оповещение", "dashboard_user")
 
             
             # 🔥 Через voice-модуль — как все остальные эндпоинты (httpx не нужен)
@@ -606,7 +624,7 @@ async def trigger_custom_alert(
                 node_id=loc_data.get("asterisk_node", "zv-asterisk"),
                 template={
                     "id": "custom_test",
-                    "name": "Тестовое оповещение",
+                    "name": "Специальное оповещение",
                     "severity": "attention",
                     "audio_file": request_data.audio_file,
                     "default_text": text
@@ -648,19 +666,7 @@ async def trigger_custom_alert(
                 subscribers_count=len(subscribers)
             )
 
-            # Опционально — сообщение в Matrix комнату локации
-            # if request_data.text_for_matrix:
-            #     room_id = loc_data.get("room_id")
-            #     if room_id:
-            #         tz = ZoneInfo(settings.TIMEZONE)
-            #         time_str = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
-            #         msg = (
-            #             f"🎙️ **{loc_data['name']}: ТЕСТОВОЕ ОПОВЕЩЕНИЕ**\n"
-            #             f"{request_data.text_for_matrix}\n"
-            #             f"Время: {time_str}"
-            #         )
-            #         await send_matrix_message(room_id, msg)
-
+            
             return {
                 "loc_id": loc_id,
                 "loc_name": loc_data["name"],
@@ -879,3 +885,57 @@ async def system_health(
         voice = None
 
     return {"voice": voice}
+
+@router.get("/api/v1/matrix/health")
+async def matrix_health(
+    request: Request,
+    x_local_token: str = Header(default=None, alias="X-Local-Token"),
+    x_api_token: str = Header(default=None, alias="X-API-Token"),
+):
+    """🩺 Здоровье Matrix-бота: валидность токена + доступность homeserver."""
+    token = x_local_token or x_api_token
+    if not token or (token != settings.LOCAL_API_TOKEN and token != settings.DASHBOARD_API_TOKEN):
+        raise HTTPException(status_code=403, detail="Invalid token")
+
+    hs = settings.MATRIX_HOMESERVER
+    bot_token = settings.MATRIX_ACCESS_TOKEN
+
+    if not hs or not bot_token:
+        return {
+            "status": "down",
+            "reason": "MATRIX_HOMESERVER or MATRIX_BOT_TOKEN not configured",
+            "homeserver": hs
+        }
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(
+                f"{hs}/_matrix/client/v3/account/whoami",
+                headers={"Authorization": f"Bearer {bot_token}"}
+            )
+    except Exception as e:
+        return {
+            "status": "down",
+            "reason": f"Connection error: {e}",
+            "homeserver": hs
+        }
+
+    if r.status_code == 200:
+        return {
+            "status": "ok",
+            "user_id": r.json().get("user_id"),
+            "homeserver": hs
+        }
+    if r.status_code in (401, 403):
+        return {
+            "status": "down",
+            "reason": "Invalid or expired bot token",
+            "homeserver": hs,
+            "http_status": r.status_code
+        }
+    return {
+        "status": "down",
+        "reason": f"Unexpected response: {r.status_code}",
+        "homeserver": hs,
+        "body": r.text[:200]
+    }

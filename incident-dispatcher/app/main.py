@@ -29,18 +29,6 @@ async def lifespan(app: FastAPI):
     auto_close_task = asyncio.create_task(auto_close_checker())
 
     logger.info("✅ Incident Dispatcher started")
-    
-        # ⚠️ Подсветка дублей IVR-кодов при старте
-    # seen = {}
-    # for loc_id in LOCATIONS.keys():
-    #     for alert in get_location_alerts(loc_id):
-    #         c = str(alert.get("trigger_code", "")).strip()
-    #         if c:
-    #             seen.setdefault(c, []).append(f"{loc_id}:{alert['template_id']}")
-    # dups = {c: v for c, v in seen.items() if len(v) > 1}
-    # if dups:
-    #     logger.warning(f"⚠️ DUPLICATE IVR CODES detected: {dups}")
-
     yield
 
     # Shutdown

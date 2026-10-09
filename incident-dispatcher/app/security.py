@@ -7,9 +7,13 @@ import httpx
 import json
 import os
 from app.core.config import settings
+from app.core.security import get_client_ip
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("security")
+
+
+
 
 
 # Загрузка локаций
@@ -18,20 +22,10 @@ try:
     with open(LOCATIONS_CONFIG_FILE, "r", encoding="utf-8") as f:
         LOCATIONS = json.load(f)
     logger.info(f"✅ Loaded {len(LOCATIONS)} locations")
-    # logger.info(f"Items:\n {LOCATIONS.keys()} \n {LOCATIONS.values()}")
 except Exception as e:
     logger.error(f"❌ Failed to load locations: {e}")
     LOCATIONS = {}
 
-# Загрузка шаблонов оповещений
-# ALERT_TEMPLATES_FILE = "config/alert_templates.json"
-# try:
-#     with open(ALERT_TEMPLATES_FILE, "r", encoding="utf-8") as f:
-#         ALERT_CONFIG = json.load(f)
-#     logger.info(f"✅ Loaded {len(ALERT_CONFIG.get('audio_templates', []))} alert templates")
-# except Exception as e:
-#     logger.error(f"❌ Failed to load alert templates: {e}")
-#     ALERT_CONFIG = {"audio_templates": [], "location_events": {}}
 
 
 CONFIG = {
@@ -50,7 +44,7 @@ CONFIG = {
     "voice_api_url": os.getenv("VOICE_API_URL", "http://voice-api:8000"),
     "voice_api_secret": os.getenv("VOICE_API_SECRET", ""),
     "local_api_token": os.getenv("VOICE_API_SECRET", ""),
-    "voice_api_secret": os.getenv("VOICE_API_SECRET", ""),
+
 }
 
 class MatrixUser(BaseModel):
@@ -58,14 +52,8 @@ class MatrixUser(BaseModel):
     user_id: str
     is_moderator: bool
 
-def get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    real_ip = request.headers.get("X-Real-IP")
-    if real_ip:
-        return real_ip.strip()
-    return request.client.host if request.client else "unknown"
+
+
 
 def check_ip_whitelist(request: Request, allowed_ips: List[str]) -> bool:
     if not allowed_ips:
@@ -85,16 +73,16 @@ def check_ip_whitelist(request: Request, allowed_ips: List[str]) -> bool:
                 return True
     return False
 
-def get_template_by_id(template_id: str) -> Optional[dict]:
-    """Найти шаблон по ID"""
-    for template in ALERT_CONFIG.get("audio_templates", []):
-        if template["id"] == template_id:
-            return template
-    return None
+# def get_template_by_id(template_id: str) -> Optional[dict]:
+#     """Найти шаблон по ID"""
+#     for template in ALERT_CONFIG.get("audio_templates", []):
+#         if template["id"] == template_id:
+#             return template
+#     return None
 
-def get_location_events(loc_id: str) -> list:
-    """Получить список событий для локации"""
-    return ALERT_CONFIG.get("location_events", {}).get(loc_id, [])
+# def get_location_events(loc_id: str) -> list:
+#     """Получить список событий для локации"""
+#     return ALERT_CONFIG.get("location_events", {}).get(loc_id, [])
 
 
 

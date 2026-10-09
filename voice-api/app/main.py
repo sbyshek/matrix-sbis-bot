@@ -1,3 +1,4 @@
+# app/main.py
 import os
 import asyncio
 import logging
@@ -11,12 +12,12 @@ from fastapi.responses import JSONResponse
 import redis.asyncio as redis
 import aiofiles
 import httpx
-from app.core.config import settings
+from app.core.config import settings, asterisk_config
 from app.core.dependencies import verify_voice_secret
 from app.services.asterisk_manager import asterisk_manager
 from app.core.subscribers import parse_subscribers_list, Subscriber, parse_subscriber
 from app.core.utils import get_play_count
-
+import time
 from pydantic import BaseModel
 
 
@@ -53,12 +54,75 @@ redis_client: redis.Redis = None
 model = None  # Будет инициализирована позже (faster-whisper)
 
 
+async def trunk_reconcile_loop():
+    while True:
+        try:
+            await asterisk_manager.reconcile_trunk_counters(redis_client)
+        except Exception as e:
+            logger.warning(f"reconcile loop error: {e}")
+        await asyncio.sleep(10)
+        
+def _s(x):
+    """bytes → str, если клиент без decode_responses."""
+    return x.decode() if isinstance(x, bytes) else x
+        
+
+
+
+async def ext_queue_worker():
+    """Выпускает внешние звонки со скоростью освобождения транков + ретраи."""
+    while True:
+        try:
+            now = time.time()
+            due = await redis_client.zrange(
+                "voice:ext_queue", "-inf", now, byscore=True, offset=0, num=30)
+            if due:
+                node = next((n for n in asterisk_config.nodes if n.active), None)
+                if node:
+                    free = {}
+                    for trunk in node.external_trunks:
+                        live = int(await redis_client.get(f"voice:active_trunk:{trunk}") or 0)
+                        free[trunk] = max(0, node.max_concurrent_per_trunk - live)
+                    for raw in due:
+                        avail = [t for t in free if free[t] > 0]
+                        if not avail:
+                            break                       # слотов нет — очередь ждёт
+                        trunk = max(avail, key=lambda t: free[t])
+                        free[trunk] -= 1
+                        member = _s(raw)
+                        await redis_client.zrem("voice:ext_queue", member)
+                        data = json.loads(member)
+                        meta = await redis_client.hgetall(f"voice:campaign:{data['cid']}")
+                        if not meta:
+                            continue
+                        meta = {_s(k): _s(v) for k, v in meta.items()}
+                        await redis_client.delete(f"voice:dedup:{data['cid']}:{data['number']}")  # ← ключ!
+                        asyncio.create_task(asterisk_manager.originate_call(
+                            node_id=meta["node_id"],
+                            subscriber=Subscriber(number=data["number"],
+                                                  display_name=data.get("name", data["number"])),
+                            audio_file=meta["audio_file"],
+                            initiator=meta.get("initiator", "queue"),
+                            campaign_id=data["cid"],
+                            redis_client=redis_client,
+                            trunk_override=trunk,
+                        ))
+                        logger.info(f"📤 Queued→originate: {data['number']} via {trunk}")
+                        await asyncio.sleep(0.3)  # пауза между звонками
+        except Exception as e:
+            logger.warning(f"ext queue worker: {e}")
+        await asyncio.sleep(2)
+
+
 # =============================================================================
 # 🚀 Startup / Shutdown
 # =============================================================================
+
+_worker_started = False
+
 @app.on_event("startup")
 async def startup_event():
-    global redis_client, model
+    global redis_client, model, _worker_started
     logger.info("🚀 Starting Voice Feedback API...")
     
     # Подключение к Redis
@@ -77,27 +141,14 @@ async def startup_event():
         logger.error(f"❌ Redis connection failed: {e}")
         raise
     
-    # Инициализация STT модели (отложено, если модель тяжёлая)
-    if settings.WHISPER_MODEL and not model:
-        logger.info(f"🎙️ Loading Whisper model: {settings.WHISPER_MODEL} ({settings.WHISPER_COMPUTE_TYPE})")
-        try:
-            from faster_whisper import WhisperModel
-            model = WhisperModel(
-                settings.WHISPER_MODEL,
-                device=settings.WHISPER_DEVICE,
-                compute_type=settings.WHISPER_COMPUTE_TYPE,
-                language=settings.WHISPER_LANGUAGE
-            )
-            logger.info("✅ Whisper model loaded")
-        except ImportError:
-            logger.warning("⚠️ faster-whisper not installed. STT will be disabled.")
-        except Exception as e:
-            logger.error(f"❌ Failed to load Whisper model: {e}")
+    # Проверка занятости транков
+    asyncio.create_task(trunk_reconcile_loop())
+    if not _worker_started:
+        _worker_started = True
+        logger.info("✅ Started ext queue worker")
+        asyncio.create_task(ext_queue_worker())
     
-    # Создаём папку для данных
-    Path(settings.VOICE_DATA_DIR).mkdir(parents=True, exist_ok=True)
-    logger.info(f"📁 Data directory: {settings.VOICE_DATA_DIR}")
-
+    
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -126,50 +177,6 @@ async def health_check():
     status["stt"] = "loaded" if model else "not_loaded"
     
     return JSONResponse(status, status_code=200 if status["status"] == "ok" else 503)
-
-
-# =============================================================================
-# 📞 Campaign Dispatcher (для Bash-скрипта Asterisk)
-# =============================================================================
-# @app.get("/api/v1/campaign/next")
-# async def get_next_call(x_secret: str = Header(..., alias="X-Secret")):
-#     """
-#     Bash-скрипт Asterisk опрашивает этот эндпоинт, чтобы получить следующий номер для вызова.
-    
-#     Возвращает:
-#     - "WAIT" — если достигнут лимит одновременных вызовов или очередь пуста
-#     - "OK|NUMBER|INITIATOR" — если есть задача (формат для удобного парсинга в bash)
-#     """
-#     verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
-    
-#     # Проверяем текущее количество активных вызовов
-#     active = await redis_client.get("voice:active") or 0
-#     active = int(active)
-    
-#     if active >= settings.VOICE_MAX_CONCURRENT:
-#         return "WAIT"
-    
-#     # Берём номер из очереди (LIFO — последний пришёл, первый ушёл)
-#     item = await redis_client.lpop("voice:queue")
-#     if not item:
-#         return "WAIT"
-    
-#     # Формат элемента в очереди: "NUMBER|INITIATOR|CONTEXT"
-#     parts = item.split("|")
-#     number = parts[0]
-#     initiator = parts[1] if len(parts) > 1 else "unknown"
-#     prefix = parts[2] if len(parts) > 2 else "unknown"
-    
-#     # Увеличиваем счётчик активных вызовов
-#     await redis_client.incr("voice:active")
-    
-#     # Ставим TTL на счётчик (страховка, если Asterisk не вернёт /finish)
-#     await redis_client.expire("voice:active", settings.ASTERISK_CALLBACK_TIMEOUT)
-    
-#     logger.info(f"📞 Dispatched call to {number} (active: {active + 1}/{settings.VOICE_MAX_CONCURRENT})")
-    
-#     # Возвращаем в формате, удобном для bash: OK|NUMBER|INITIATOR
-#     return f"OK|{number}|{initiator}|{prefix}"
 
 
 @app.get("/api/v1/campaign/next")
@@ -211,32 +218,7 @@ async def get_next_call(x_secret: str = Header(..., alias="X-Secret")):
     
     return f"OK|{number}|{code}|{description}|{initiator}"
 
-# @app.post("/api/v1/campaign/push")
-# async def push_numbers(request: Request, x_secret: str = Header(..., alias="X-Secret")):
-#     verify_voice_secret(x_secret, settings.VOICE_API_SECRET)
-    
-#     data = await request.json()
-#     numbers_data = data.get("numbers", [])
-#     prefix = data.get("prefix", "unknown")
-#     context = data.get("context", "pa_call_file")
-    
-#     count = 0
-#     for item in numbers_data:
-#         num = ''.join(filter(str.isdigit, str(item.get("number", ""))))
-#         note = item.get("note", "Без примечания")
-        
-#         if 10 <= len(num) <= 15:
-#             # Формат очереди: number|note|prefix|context
-#             payload = f"{num}|{note}|{prefix}|{context}"
-#             await redis_client.lpush("voice:queue", payload)
-#             count += 1
-            
-#     return {
-#         "status": "queued",
-#         "count": count,
-#         "queue_size": await redis_client.llen("voice:queue"),
-#         "prefix": prefix
-#     }
+
 
 @app.post("/api/v1/campaign/push")
 async def push_numbers(
@@ -341,11 +323,32 @@ async def finish_call(
     except Exception as e:
         logger.error(f"❌ Failed to write to JSONL: {e}")
     
-    # Сбрасываем счётчик активных вызовов
-    # current = await redis_client.decr("voice:active")
-    # if current < 0:
-    #     await redis_client.set("voice:active", 0)
-    #     current = 0
+    
+    ########################################
+    RETRY_STATUSES = {"unavailable", "congestion"}
+    MAX_EXT_RETRIES = 4
+    
+
+    if trunk != "internal" and status in RETRY_STATUSES:
+        cnt_key = f"voice:retry_count:{campaign_id}:{number}"
+        attempts = int(await redis_client.incr(cnt_key))
+        await redis_client.expire(cnt_key, 3600)
+        
+            
+            
+        if attempts <= MAX_EXT_RETRIES:
+            # delay = 15 * attempts
+            delay = {1: 30, 2: 60, 3: 120, 4: 180}.get(attempts, 180)
+            await redis_client.zadd("voice:ext_queue", {json.dumps({
+                "cid": campaign_id, "number": number, "name": number,
+            }): time.time() + delay})
+            logger.info(f"🔁 {number}: попытка {attempts} через {delay}с")    
+            
+        else:
+            logger.warning(f"⛔ {number}: исчерпаны {MAX_EXT_RETRIES} попытки — абонент помечен недоступным")
+    ########################################
+    
+    
     
     if event == "call_finished" and trunk != "unknown" and trunk != "internal":
         current = await redis_client.decr(f"voice:active_trunk:{trunk}")
@@ -532,75 +535,6 @@ async def trigger_template_campaign(
         "total_subscribers": len(subscribers),
         "results": results
     }
-
-
-
-
-
-# =============================================================================
-# 🧠 Фоновая обработка: STT + Matrix
-# =============================================================================
-# async def process_voice_feedback(
-#     filepath: str,
-#     caller_id: str,
-#     initiator: str,
-#     exten: str,      # 🔥 Новое поле
-#     task_id: str
-# ):
-#     logger.info(f"🎙️ Processing feedback: {task_id} ({caller_id}) for exten: {exten}")
-#     try:
-#         # 1. Транскрипция (без изменений)
-#         text = ""
-#         if model:
-#             logger.info(f"🔊 Running Whisper on {filepath}")
-#             segments, _ = model.transcribe(
-#                 filepath,
-#                 language=settings.WHISPER_LANGUAGE,
-#                 prompt=settings.WHISPER_PROMPT,
-#                 vad_filter=True,
-#                 vad_parameters=dict(min_silence_duration_ms=500)
-#             )
-#             text = " ".join([segment.text.strip() for segment in segments]).strip()
-#             logger.info(f"📝 Transcribed: {text[:100]}..." if len(text) > 100 else f"📝 Transcribed: {text}")
-#         else:
-#             text = "[STT не доступен]"
-
-#         # 2. 🔥 НОВАЯ ЛОГИКА: Отправляем в incident-dispatcher (вместо Matrix)
-#         if text and text != "[STT не доступен]":
-#             try:
-#                 async with httpx.AsyncClient(timeout=15.0) as client:
-#                     payload = {
-#                         "exten": exten,
-#                         "caller_id": caller_id,
-#                         "initiator": initiator,
-#                         "comment": text
-#                     }
-#                     headers = {
-#                         "X-API-Token": settings.INCIDENT_DISPATCHER_TOKEN,
-#                         "Content-Type": "application/json"
-#                     }
-#                     url = f"{settings.INCIDENT_DISPATCHER_URL}/api/v1/incident/voice-trigger"
-                    
-#                     response = await client.post(url, json=payload, headers=headers)
-                    
-#                     if response.status_code == 200:
-#                         logger.info(f"✅ Successfully routed incident to dispatcher for exten {exten}")
-#                     else:
-#                         logger.error(f"❌ Dispatcher rejected request: {response.status_code} - {response.text}")
-                        
-#             except Exception as e:
-#                 logger.error(f"❌ Failed to call incident-dispatcher: {e}")
-#         else:
-#             logger.warning("⚠️ No text transcribed, skipping incident creation")
-
-#         # 3. Очистка файла
-#         if os.path.exists(filepath):
-#             os.remove(filepath)
-#             logger.info(f"🗑️ Deleted temporary file: {filepath}")
-
-#     except Exception as e:
-#         logger.error(f"❌ Error processing feedback {task_id}: {e}", exc_info=True)
-
 
 
 # =============================================================================
