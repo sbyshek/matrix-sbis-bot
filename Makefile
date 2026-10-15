@@ -73,11 +73,17 @@ down-sbis: ## 🛑 Остановить sbis-бота
 restart-sbis: ## 🔄 Рестарт sbis-бота
 	$(COMPOSE) restart sbis-bot
 
+up-sbis-recreate: ## 🔄 Рестарт sbis-бота
+	$(COMPOSE) up -d sbis-bot --force-recreate
+
 logs-sbis: ## 📜 Логи sbis-бота
 	$(COMPOSE) logs -f sbis-bot
 
 shell-sbis: ## 🐚 Bash внутри контейнера sbis-бота
 	$(COMPOSE) exec sbis-bot bash
+
+gettoken-sbis: ##  Узнать токен бота в контейнере sbis-бота
+	$(COMPOSE) exec sbis-bot bash -c 'echo "Bot token:" $$BOT_ACCESS_TOKEN'
 
 # ================= AUTO BOT =================
 
@@ -224,8 +230,14 @@ up-incident: ## 🚀 Запустить INCIDENT
 down-incident: ##  Остановить INCIDENT сервисы
 	$(COMPOSE) stop ${INCIDENT}
 
-restart-incident: ##  Рестарт VOICE сервисов
+restart-incident: ##  Рестарт INCIDENT сервисов
 	$(COMPOSE) restart ${INCIDENT}
+
+restart-incident-recreate: ##  Рестарт INCIDENT сервисов
+	$(COMPOSE) up -d ${INCIDENT} --force-recreate
+
+gettoken-incident: ##  Узнать токен бота в контейнере INCIDENT сервисов
+	$(COMPOSE) exec ${INCIDENT} bash -c 'echo "Bot token:" $$MATRIX_ACCESS_TOKEN'
 
 logs-incident: ##  Логи TASK сервисов
 	$(COMPOSE) logs -f ${INCIDENT} --tail 30 | grep -v -e '"GET /api/dashboard HTTP/1.0" 200 OK' -e 'INFO:security:Dashboard access granted by IP whitelist' -e 'INFO:app.core.security:✅ IP'

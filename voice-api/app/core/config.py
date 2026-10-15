@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     # Storage
     VOICE_DATA_DIR: str = "/app/data/voice"
     VOICE_RETENTION_HOURS: int = 24
-
+    MAX_CONCURRENT_INTERNAL:int = 25
 
     # Play repeat count 
     DEFAULT_PLAY_COUNT: int = 2

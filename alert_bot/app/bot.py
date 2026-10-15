@@ -16,14 +16,44 @@ API_BASE = "http://alert_api:8000/api/v1"
 class AlertBot:
     def __init__(self):
         self.client = AsyncClient(config.HOMESERVER, config.USERNAME)
+        if config.USE_TOKEN_AUTH and config.BOT_ACCESS_TOKEN:
+            self.client.access_token = config.BOT_ACCESS_TOKEN
+            self.client.user_id = config.USERNAME
+            logger.info(f"✅ Бот {config.USERNAME} залогинился через токен")
+            
         self.routes = {}  # Будет загружено с API
         self.sources = {}  # Будет загружено с API
         self.last_check = load_cursor() or datetime.now(timezone.utc).isoformat()
         if not load_cursor(): save_cursor(self.last_check)
 
     async def login(self):
-        resp = await self.client.login(config.PASSWORD)
-        return isinstance(resp, LoginResponse)
+        if config.USE_TOKEN_AUTH and config.BOT_ACCESS_TOKEN:
+            try:
+                whoami = await self.client.whoami()
+                if whoami and getattr(whoami, 'user_id', None):
+                    logger.info("✅ Токен доступа проверен успешно")
+                    return True
+            except Exception as e:
+                logger.error(f"❌ Ошибка проверки токена: {e}")
+                return False
+        max_retries = 3
+        for _ in range(max_retries):
+            try:
+                response = await self.client.login(password=config.PASSWORD)
+                if isinstance(response, LoginResponse):
+                    logger.info(f"✅ Бот {config.USERNAME} залогинился")
+                    return True
+            except Exception as e:
+                logger.error(f"❌ Ошибка логина: {e}")
+                await asyncio.sleep(5)
+                
+            if _ < max_retries:
+                delay = 10 * (_ + 1)
+                logger.info(f"Повторная попытка логина через 5 секунд")
+                await asyncio.sleep(delay=delay)
+        
+        logger.error("❌ Все попытки логина провалились")
+        return False
 
     async def fetch_routes(self):
         try:

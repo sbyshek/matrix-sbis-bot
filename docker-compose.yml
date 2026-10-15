@@ -38,6 +38,12 @@ services:
       - ./sbis_bot/data:/app/data    # Состояние
       - ./sbis_bot/logs:/app/logs    # Логи
     restart: unless-stopped
+    # restart: on-failure:5
+    # deploy:
+    #   restart_policy:
+    #     delay: 60s             # Пауза 1 мин между рестартами
+    #     max_attempts: 5
+    #     window: 300s
     profiles:
       - all
       - dev
@@ -283,11 +289,11 @@ services:
       - ./infra/it-gate/docs:/docs:ro
     networks:
       - matrix-net
-    command: >
-      sh -c "
-        python3 /app/generate_nginx_acl.py &&
-        nginx -g 'daemon off;'
-      "
+    # command: >
+    #   sh -c "
+    #     python3 /app/generate_nginx_acl.py &&
+    #     nginx -g 'daemon off;'
+    #   "
     logging:
       driver: json-file
       options:

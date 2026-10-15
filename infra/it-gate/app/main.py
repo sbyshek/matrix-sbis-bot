@@ -187,7 +187,8 @@ async def render_doc_page(request: Request, service_id: str, page: str):
         "service": service,
         "content": html_content,
         "current_page": page,
-        "pages": doc_pages
+        "pages": doc_pages,
+        "client_ip": client_ip
     })
 
 

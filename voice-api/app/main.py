@@ -66,7 +66,117 @@ def _s(x):
     """bytes → str, если клиент без decode_responses."""
     return x.decode() if isinstance(x, bytes) else x
         
+_worker_started = False
 
+async def campaign_worker():
+    """
+    Единый воркер пейсинга для всех кампаний.
+    Каждые 2 секунды:
+    - смотрит ЖИВЫЕ каналы через AMI
+    - выпускает внутренние, если internal_free > 0
+    - выпускает внешние, если есть свободные слоты на транках
+    """
+    import time as _time
+
+    while True:
+        try:
+            now = _time.time()
+            node = next((n for n in asterisk_config.nodes if n.active), None)
+            if not node:
+                await asyncio.sleep(2)
+                continue
+
+            # ── Живая нагрузка из AMI ──
+            try:
+                load = await asterisk_manager.get_live_load(node)
+            except Exception as e:
+                logger.warning(f"campaign worker: AMI load failed: {e}")
+                await asyncio.sleep(2)
+                continue
+
+            # ════════════════════════════════════════════
+            #  ВНУТРЕННИЕ: общий лимит MAX_CONCURRENT_INTERNAL
+            # ════════════════════════════════════════════
+            int_free = max(0, settings.MAX_CONCURRENT_INTERNAL - load["internal"])
+            if int_free > 0:
+                due = await redis_client.zrange(
+                    "voice:int_queue", "-inf", now,
+                    byscore=True,
+                    offset=0, num=min(int_free, 10)
+                )
+                for raw in due:
+                    member = _s(raw)
+                    await redis_client.zrem("voice:int_queue", member)
+                    data = json.loads(member)
+                    meta = await redis_client.hgetall(f"voice:campaign:{data['cid']}")
+                    if not meta:
+                        continue
+                    meta = {_s(k): _s(v) for k, v in meta.items()}
+                    # 🔥 Удаляем dedup перед ретраем
+                    await redis_client.delete(
+                        f"voice:dedup:{data['cid']}:{data['number']}"
+                    )
+                    asyncio.create_task(asterisk_manager.originate_call(
+                        node_id=meta["node_id"],
+                        subscriber=Subscriber(
+                            number=data["number"],
+                            display_name=data.get("name", data["number"])
+                        ),
+                        audio_file=meta["audio_file"],
+                        initiator=meta.get("initiator", "queue"),
+                        target_exten=meta.get("target_exten", "unknown"),
+                        campaign_id=data["cid"],
+                        redis_client=redis_client,
+                    ))
+                    await asyncio.sleep(0.25)  # строб
+
+            # ════════════════════════════════════════════
+            #  ВНЕШНИЕ: слоты по живым каналам каждого транка
+            # ════════════════════════════════════════════
+            due = await redis_client.zrange(
+                "voice:ext_queue", "-inf", now,
+                byscore=True, offset=0, num=30
+            )
+            if due:
+                free = {
+                    t: max(0, node.max_concurrent_per_trunk - load["trunks"].get(t, 0))
+                    for t in node.external_trunks
+                }
+                for raw in due:
+                    avail = [t for t in free if free[t] > 0]
+                    if not avail:
+                        break
+                    trunk = max(avail, key=lambda t: free[t])
+                    free[trunk] -= 1
+
+                    member = _s(raw)
+                    await redis_client.zrem("voice:ext_queue", member)
+                    data = json.loads(member)
+                    meta = await redis_client.hgetall(f"voice:campaign:{data['cid']}")
+                    if not meta:
+                        continue
+                    meta = {_s(k): _s(v) for k, v in meta.items()}
+                    await redis_client.delete(
+                        f"voice:dedup:{data['cid']}:{data['number']}"
+                    )
+                    asyncio.create_task(asterisk_manager.originate_call(
+                        node_id=meta["node_id"],
+                        subscriber=Subscriber(
+                            number=data["number"],
+                            display_name=data.get("name", data["number"])
+                        ),
+                        audio_file=meta["audio_file"],
+                        initiator=meta.get("initiator", "queue"),
+                        target_exten=meta.get("target_exten", "unknown"),
+                        campaign_id=data["cid"],
+                        redis_client=redis_client,
+                        trunk_override=trunk,
+                    ))
+                    await asyncio.sleep(0.3)
+
+        except Exception as e:
+            logger.warning(f"campaign worker: {e}")
+        await asyncio.sleep(2)
 
 
 async def ext_queue_worker():
@@ -118,7 +228,7 @@ async def ext_queue_worker():
 # 🚀 Startup / Shutdown
 # =============================================================================
 
-_worker_started = False
+# _worker_started = False
 
 @app.on_event("startup")
 async def startup_event():
@@ -145,8 +255,8 @@ async def startup_event():
     asyncio.create_task(trunk_reconcile_loop())
     if not _worker_started:
         _worker_started = True
-        logger.info("✅ Started ext queue worker")
-        asyncio.create_task(ext_queue_worker())
+        logger.info("✅ Started campaign worker (int + ext queues)")
+        asyncio.create_task(campaign_worker())
     
     
 

@@ -1,20 +1,210 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<title>{{ service_name }} — Документация</title>
+{% extends "base.html" %}
+
+{% block title %}{{ service.name }} — Документация | ВПК-Ойл{% endblock %}
+
+{% block extra_css %}
 <style>
-body { font-family: system-ui; background: #0f1115; color: #e1e7ef; margin: 0; padding: 40px; max-width: 800px; margin: 0 auto; }
-h1 { font-weight: 300; }
-code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; }
-pre { background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; overflow-x: auto; }
-pre code { background: none; padding: 0; }
-.back { display: inline-block; margin-bottom: 20px; color: #74c0fc; text-decoration: none; }
+    .docs-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 32px;
+        padding-top: 40px;
+        padding-bottom: 60px;
+        align-items: start;
+    }
+
+    /* ── Боковая навигация ── */
+    .docs-sidebar {
+        background: #fff;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        position: sticky;
+        top: 90px;
+        border-top: 3px solid var(--vpk-turquoise);
+    }
+
+    .docs-sidebar h3 {
+        font-family: var(--font-headings);
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--vpk-blue-dark);
+        margin-bottom: 14px;
+    }
+
+    .docs-nav { list-style: none; }
+    .docs-nav li { margin-bottom: 6px; }
+    .docs-nav a {
+        display: block;
+        padding: 8px 12px;
+        border-radius: 6px;
+        text-decoration: none;
+        color: var(--text-main);
+        font-size: 0.9rem;
+        border-left: 3px solid transparent;
+        transition: all .2s;
+    }
+    .docs-nav a:hover {
+        background: rgba(66, 190, 172, 0.12);
+        color: var(--vpk-blue-light);
+    }
+    .docs-nav a.active {
+        background: rgba(14, 114, 185, 0.10);
+        border-left-color: var(--vpk-turquoise);
+        color: var(--vpk-blue-dark);
+        font-weight: 600;
+    }
+
+    .docs-sidebar .back {
+        display: block;
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid #e6e9ef;
+        font-size: .85rem;
+        color: var(--vpk-blue-light);
+        text-decoration: none;
+    }
+    .docs-sidebar .back:hover { text-decoration: underline; }
+
+    /* ── Контент ── */
+    .docs-content {
+        background: #fff;
+        border-radius: 12px;
+        padding: 40px 48px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        min-width: 0;
+    }
+
+    .docs-breadcrumbs {
+        font-size: .85rem;
+        color: var(--text-muted);
+        margin-bottom: 24px;
+    }
+    .docs-breadcrumbs a { color: var(--vpk-blue-light); text-decoration: none; }
+    .docs-breadcrumbs a:hover { text-decoration: underline; }
+
+    /* ── Типографика Markdown в фирменных цветах ── */
+    .docs-content h1 {
+        font-family: var(--font-headings);
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: var(--vpk-blue-dark);
+        margin: 0 0 20px;
+        padding-bottom: 14px;
+        border-bottom: 3px solid var(--vpk-turquoise);
+    }
+    .docs-content h2 {
+        font-family: var(--font-headings);
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--vpk-blue-dark);
+        margin: 32px 0 14px;
+    }
+    .docs-content h3 {
+        font-family: var(--font-headings);
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: var(--vpk-blue-dark);
+        margin: 24px 0 10px;
+    }
+    .docs-content p  { margin: 0 0 14px; line-height: 1.75; }
+    .docs-content ul, .docs-content ol { margin: 0 0 14px 22px; }
+    .docs-content li { margin-bottom: 6px; line-height: 1.6; }
+
+    .docs-content a { color: var(--vpk-blue-light); }
+    .docs-content a:hover { color: var(--vpk-turquoise); }
+
+    .docs-content code {
+        background: rgba(41, 42, 134, 0.07);
+        color: var(--vpk-blue-dark);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: .88em;
+        font-family: "SFMono-Regular", Consolas, monospace;
+    }
+    .docs-content pre {
+        background: #1a1d24;
+        color: #e1e7ef;
+        border-radius: 8px;
+        padding: 18px 20px;
+        overflow-x: auto;
+        margin: 16px 0;
+        border-left: 4px solid var(--vpk-turquoise);
+    }
+    .docs-content pre code {
+        background: none; color: inherit; padding: 0;
+        font-size: .85rem; line-height: 1.6;
+    }
+
+    .docs-content blockquote {
+        margin: 16px 0;
+        padding: 12px 18px;
+        background: rgba(66, 190, 172, 0.10);
+        border-left: 4px solid var(--vpk-turquoise);
+        border-radius: 0 8px 8px 0;
+    }
+    .docs-content blockquote p:last-child { margin-bottom: 0; }
+
+    .docs-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 16px 0;
+        font-size: .92rem;
+    }
+    .docs-content th, .docs-content td {
+        padding: 10px 12px;
+        border: 1px solid #e0e4ea;
+        text-align: left;
+        vertical-align: top;
+    }
+    .docs-content th {
+        background: rgba(41, 42, 134, 0.06);
+        font-weight: 600;
+        color: var(--vpk-blue-dark);
+    }
+    .docs-content tr:nth-child(even) td { background: #fafbfc; }
+
+    .docs-content img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        margin: 16px 0;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.10);
+    }
+
+    .docs-content hr { border: none; border-top: 1px solid #e0e4ea; margin: 28px 0; }
+
+    @media (max-width: 900px) {
+        .docs-layout { grid-template-columns: 1fr; }
+        .docs-sidebar { position: static; }
+        .docs-content { padding: 28px 22px; }
+    }
 </style>
-</head>
-<body>
-<a href="/" class="back">← Назад к каталогу</a>
-<h1>{{ service_name }}</h1>
-{{ content | safe }}
-</body>
-</html>
+{% endblock %}
+
+{% block content %}
+<div class="container docs-layout">
+    <aside class="docs-sidebar">
+        <h3>{{ service.icon or '📚' }} {{ service.name }}</h3>
+        <ul class="docs-nav">
+            {% for p in pages %}
+            <li>
+                <a href="/docs/{{ service.id }}/{{ p.slug }}"
+                   class="{{ 'active' if p.active else '' }}">{{ p.title }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+        <a class="back" href="/service/{{ service.id }}">← К странице сервиса</a>
+        <a class="back" href="/">← В каталог</a>
+    </aside>
+
+    <article class="docs-content">
+        <div class="docs-breadcrumbs">
+            <a href="/">Каталог</a> /
+            <a href="/service/{{ service.id }}">{{ service.name }}</a> /
+            Документация
+        </div>
+        {{ content | safe }}
+    </article>
+</div>
+{% endblock %}

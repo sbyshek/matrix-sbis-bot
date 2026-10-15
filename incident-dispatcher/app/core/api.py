@@ -553,6 +553,143 @@ async def trigger_from_asterisk_voice(
     
 
 
+# @router.post("/api/v1/alert/trigger-custom")
+# async def trigger_custom_alert(
+#     request_data: CustomAlertTriggerRequest,
+#     request: Request,
+#     x_local_token: str = Header(default=None, alias="X-Local-Token"),
+#     x_api_token: str = Header(default=None, alias="X-API-Token")
+# ):
+#     """
+#     🎙️ Тестовое оповещение произвольной записью.
+#     Абоненты — объединённый уникальный список оповещения локации.
+#     """
+
+#     require_dispatcher_token(request, x_local_token, x_api_token)
+
+#     results = {"success": [], "failed": [], "total": len(request_data.loc_ids)}
+
+#     async def trigger_single(loc_id: str):
+#         try:
+#             if loc_id not in LOCATIONS:
+#                 return {"loc_id": loc_id, "error": "Location not found"}
+
+#             loc_data = LOCATIONS[loc_id]
+
+                
+#             subscribers = get_all_location_subscribers(loc_id)
+
+#             if not subscribers:
+#                 return {"loc_id": loc_id, "error": "No subscribers"}
+
+#             text = request_data.text_for_matrix or "🔔 Тестовое голосовое оповещение"
+
+#             if request_data.text_for_matrix:
+#                 room_id = loc_data.get("room_id")
+#                 if room_id:
+#                     tz = ZoneInfo(settings.TIMEZONE)
+#                     time_str = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
+#                     msg = (
+#                         f"🎙️ **{loc_data['name']}: СПЕЦИАЛЬНОЕ ОПОВЕЩЕНИЕ**\n"
+#                         f"{request_data.text_for_matrix}\n"
+#                         f"Время: {time_str}"
+#                     )
+#                     await send_matrix_message(room_id, msg)
+                    
+#             if request_data.send_voice:
+#                 wav = AUDIO_DIR / f"{request_data.audio_file}.wav"
+#                 if wav.exists():
+#                     try:
+#                         mxc = await upload_matrix_media(wav)   # грузим ОДИН раз
+#                         for loc_id in request_data.loc_ids:
+#                             room_id = LOCATIONS[loc_id]["room_id"]
+#                             try:
+#                                 await send_matrix_audio(room_id, mxc, wav.name, wav.stat().st_size)
+#                                 logger.info(f"🎧 Voice message sent to {loc_id}")
+#                             except Exception as e:
+#                                 logger.error(f"❌ m.audio to {loc_id} failed: {e}")
+#                     except Exception as e:
+#                         logger.error(f"❌ Matrix media upload failed: {e}")
+#                 else:
+#                     logger.warning(f"⚠️ WAV not found for voice message: {wav}")
+
+#             # Создаем событие в локации
+#             await create_event(loc_id, "attention", "Специальное оповещение", "dashboard_user")
+
+            
+#             # 🔥 Через voice-модуль — как все остальные эндпоинты (httpx не нужен)
+#             result = await trigger_campaign(
+#                 loc_id=loc_id,
+#                 loc_name=loc_data["name"],
+#                 node_id=loc_data.get("asterisk_node", "zv-asterisk"),
+#                 template={
+#                     "id": "custom_test",
+#                     "name": "Специальное оповещение",
+#                     "severity": "attention",
+#                     "audio_file": request_data.audio_file,
+#                     "default_text": text
+#                 },
+#                 alert_config={
+#                     "audio_file": request_data.audio_file,
+#                     "text_for_matrix": text
+#                 },
+#                 subscribers=subscribers,
+#                 initiator="custom_test"
+#             )
+
+#             campaign_id = result.get("campaign_id")
+
+#             # Детали запуска — в Redis (для модалки результатов)
+#             if campaign_id:
+#                 try:
+#                     await get_redis().set(
+#                         f"dispatch:campaign_launch:{campaign_id}",
+#                         json.dumps(result.get("results", {}), ensure_ascii=False),
+#                         ex=settings.HISTORY_TTL_HOURS * 3600
+#                     )
+#                 except Exception as e:
+#                     logger.error(f"❌ Failed to store launch details: {e}")
+
+#             # Единая история
+#             await save_unified_history(
+#                 loc_id=loc_id,
+#                 loc_name=loc_data["name"],
+#                 category="campaign",
+#                 action="triggered",
+#                 severity="attention",
+#                 title="🎙️ Тестовое оповещение",
+#                 description=text,
+#                 source="custom_test",
+#                 template_id="custom_test",
+#                 template_name="Тестовое оповещение",
+#                 campaign_id=campaign_id,
+#                 subscribers_count=len(subscribers)
+#             )
+
+            
+#             return {
+#                 "loc_id": loc_id,
+#                 "loc_name": loc_data["name"],
+#                 "campaign_id": campaign_id,
+#                 "subscribers_count": len(subscribers)
+#             }
+
+#         except VoiceAPIError as e:
+#             logger.error(f"❌ Custom trigger VoiceAPIError for {loc_id}: {e.detail}")
+#             return {"loc_id": loc_id, "error": e.detail}
+#         except Exception as e:
+#             # 🔥 Теперь любая ошибка видна в логах
+#             logger.error(f"❌ Custom trigger failed for {loc_id}: {e}")
+#             return {"loc_id": loc_id, "error": str(e)}
+
+#     tasks = [trigger_single(loc_id) for loc_id in request_data.loc_ids]
+#     for r in await asyncio.gather(*tasks):
+#         (results["failed"] if "error" in r else results["success"]).append(r)
+
+#     logger.info(f"✅ Custom alert: {len(results['success'])}/{len(request_data.loc_ids)} locations")
+#     return results
+
+
 @router.post("/api/v1/alert/trigger-custom")
 async def trigger_custom_alert(
     request_data: CustomAlertTriggerRequest,
@@ -560,11 +697,6 @@ async def trigger_custom_alert(
     x_local_token: str = Header(default=None, alias="X-Local-Token"),
     x_api_token: str = Header(default=None, alias="X-API-Token")
 ):
-    """
-    🎙️ Тестовое оповещение произвольной записью.
-    Абоненты — объединённый уникальный список оповещения локации.
-    """
-
     require_dispatcher_token(request, x_local_token, x_api_token)
 
     results = {"success": [], "failed": [], "total": len(request_data.loc_ids)}
@@ -575,8 +707,6 @@ async def trigger_custom_alert(
                 return {"loc_id": loc_id, "error": "Location not found"}
 
             loc_data = LOCATIONS[loc_id]
-
-                
             subscribers = get_all_location_subscribers(loc_id)
 
             if not subscribers:
@@ -584,6 +714,7 @@ async def trigger_custom_alert(
 
             text = request_data.text_for_matrix or "🔔 Тестовое голосовое оповещение"
 
+            # ── ТЕКСТ в комнату этой локации ──
             if request_data.text_for_matrix:
                 room_id = loc_data.get("room_id")
                 if room_id:
@@ -595,29 +726,11 @@ async def trigger_custom_alert(
                         f"Время: {time_str}"
                     )
                     await send_matrix_message(room_id, msg)
-                    
-            if request_data.send_voice:
-                wav = AUDIO_DIR / f"{request_data.audio_file}.wav"
-                if wav.exists():
-                    try:
-                        mxc = await upload_matrix_media(wav)   # грузим ОДИН раз
-                        for loc_id in request_data.loc_ids:
-                            room_id = LOCATIONS[loc_id]["room_id"]
-                            try:
-                                await send_matrix_audio(room_id, mxc, wav.name, wav.stat().st_size)
-                                logger.info(f"🎧 Voice message sent to {loc_id}")
-                            except Exception as e:
-                                logger.error(f"❌ m.audio to {loc_id} failed: {e}")
-                    except Exception as e:
-                        logger.error(f"❌ Matrix media upload failed: {e}")
-                else:
-                    logger.warning(f"⚠️ WAV not found for voice message: {wav}")
 
-            # Создаем событие в локации
+            # ── УБРАЛИ: блок send_voice был здесь ──
+
             await create_event(loc_id, "attention", "Специальное оповещение", "dashboard_user")
 
-            
-            # 🔥 Через voice-модуль — как все остальные эндпоинты (httpx не нужен)
             result = await trigger_campaign(
                 loc_id=loc_id,
                 loc_name=loc_data["name"],
@@ -639,7 +752,6 @@ async def trigger_custom_alert(
 
             campaign_id = result.get("campaign_id")
 
-            # Детали запуска — в Redis (для модалки результатов)
             if campaign_id:
                 try:
                     await get_redis().set(
@@ -650,7 +762,6 @@ async def trigger_custom_alert(
                 except Exception as e:
                     logger.error(f"❌ Failed to store launch details: {e}")
 
-            # Единая история
             await save_unified_history(
                 loc_id=loc_id,
                 loc_name=loc_data["name"],
@@ -666,7 +777,6 @@ async def trigger_custom_alert(
                 subscribers_count=len(subscribers)
             )
 
-            
             return {
                 "loc_id": loc_id,
                 "loc_name": loc_data["name"],
@@ -678,13 +788,40 @@ async def trigger_custom_alert(
             logger.error(f"❌ Custom trigger VoiceAPIError for {loc_id}: {e.detail}")
             return {"loc_id": loc_id, "error": e.detail}
         except Exception as e:
-            # 🔥 Теперь любая ошибка видна в логах
             logger.error(f"❌ Custom trigger failed for {loc_id}: {e}")
             return {"loc_id": loc_id, "error": str(e)}
 
+    # ── Запуск всех локаций параллельно ──
     tasks = [trigger_single(loc_id) for loc_id in request_data.loc_ids]
     for r in await asyncio.gather(*tasks):
         (results["failed"] if "error" in r else results["success"]).append(r)
+
+    # ════════════════════════════════════════════════════════════════
+    # 🔥 ОТПРАВКА ГОЛОСОВОГО СООБЩЕНИЯ — ОДИН РАЗ, ПОСЛЕ всех локаций
+    # ════════════════════════════════════════════════════════════════
+    if request_data.send_voice:
+        wav = AUDIO_DIR / f"{request_data.audio_file}.wav"
+        if wav.exists():
+            try:
+                mxc = await upload_matrix_media(wav)           # ОДИН upload
+                # Дедупликация комнат (если несколько локаций в одной комнате)
+                seen = set()
+                rooms = []
+                for lid in request_data.loc_ids:
+                    rid = LOCATIONS[lid].get("room_id")
+                    if rid and rid not in seen:
+                        seen.add(rid)
+                        rooms.append((lid, rid))
+                for lid, rid in rooms:
+                    try:
+                        await send_matrix_audio(rid, mxc, wav.name, wav.stat().st_size)
+                        logger.info(f"🎧 Voice message sent to {lid}")
+                    except Exception as e:
+                        logger.error(f"❌ m.audio to {lid} failed: {e}")
+            except Exception as e:
+                logger.error(f"❌ Matrix media upload failed: {e}")
+        else:
+            logger.warning(f"⚠️ WAV not found for voice message: {wav}")
 
     logger.info(f"✅ Custom alert: {len(results['success'])}/{len(request_data.loc_ids)} locations")
     return results

@@ -9,6 +9,7 @@ from app.core import api, dashboard, desk, location, audio
 from app.core.background import auto_close_checker
 from app.core.redis import init_locations_state, init_redis
 from app.security import LOCATIONS
+from app.core.monitoring import periodic_trunk_monitor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,15 +28,18 @@ async def lifespan(app: FastAPI):
     await init_locations_state(list(LOCATIONS.keys()))
 
     auto_close_task = asyncio.create_task(auto_close_checker())
+    trunk_monitoring_task = asyncio.create_task(periodic_trunk_monitor())
 
     logger.info("✅ Incident Dispatcher started")
     yield
 
     # Shutdown
     auto_close_task.cancel()
-
+    trunk_monitoring_task.cancel()
+    
     try:
         await auto_close_task
+        await trunk_monitoring_task
     except asyncio.CancelledError:
         pass
 

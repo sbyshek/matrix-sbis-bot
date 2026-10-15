@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # MATRIX_BOT_TOKEN: str = MATRIX_ACCESS_TOKEN
     
     REDIS_URL: str = "redis://redis:6379/4"
-
+    
     # Дашборд
     DASHBOARD_MATRIX_ROOM_ID: str
     DASHBOARD_API_TOKEN: str
@@ -55,7 +55,8 @@ class Settings(BaseSettings):
     VOICE_API_SECRET: str
     DISPATCHER_WRITE_TOKEN: str
     ASTERISK_ORIGINATE_TIMEOUT: int = 40
-
+    
+    MAX_CONCURRENT_INTERNAL: int = 25
     #
     LOCAL_API_TOKEN: str
     ALLOWED_IPS: str = "127.0.0.1"

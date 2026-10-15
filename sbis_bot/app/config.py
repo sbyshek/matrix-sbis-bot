@@ -9,6 +9,8 @@ load_dotenv()
 HOMESERVER = os.getenv("MATRIX_HOMESERVER", "").rstrip("/")
 USERNAME = os.getenv("MATRIX_BOT_USERNAME")
 PASSWORD = os.getenv("MATRIX_BOT_PASSWORD")
+USE_TOKEN_AUTH=os.getenv("USE_TOKEN_AUTH", "false").lower() == "true"
+BOT_ACCESS_TOKEN=os.getenv("BOT_ACCESS_TOKEN", None)
 TARGET_ROOM = os.getenv("MATRIX_ROOM_ID", "").strip() or None
 MATRIX_DOMAIN = os.getenv("MATRIX_DOMAIN", "matrix.vpk-oil.ru")
 ADMIN_ROOM_ID = os.getenv("ADMIN_ROOM_ID")

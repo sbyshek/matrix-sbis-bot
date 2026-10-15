@@ -1,3 +1,5 @@
+# sbis_bot/app/bot.py
+
 import asyncio
 import re
 import time
@@ -29,6 +31,11 @@ ROUTER_CONFIG = {
 class MatrixVPNBot:
     def __init__(self):
         self.client = AsyncClient(config.HOMESERVER, config.USERNAME)
+        
+        if config.USE_TOKEN_AUTH and config.BOT_ACCESS_TOKEN:
+            self.client.access_token = config.BOT_ACCESS_TOKEN
+            self.client.user_id = config.USERNAME
+            logger.info(f"✅ Бот {config.USERNAME} залогинился через токен")
         self.room_id = config.TARGET_ROOM
         self.state_manager = ConnectionStateManager()
         
@@ -39,13 +46,35 @@ class MatrixVPNBot:
         self.tz = config.TIMEZONE_TZINFO
 
     async def login(self):
-        response = await self.client.login(config.PASSWORD)
-        if isinstance(response, LoginResponse):
-            logger.info(f"✅ Бот {config.USERNAME} залогинился")
-            return True
-        logger.error(f"❌ Ошибка логина: {response}")
+        
+        if config.USE_TOKEN_AUTH and config.BOT_ACCESS_TOKEN:
+            try:
+                whoami = await self.client.whoami()
+                if whoami and getattr(whoami, 'user_id', None):
+                    logger.info("✅ Токен доступа проверен успешно")
+                    return True
+            except Exception as e:
+                logger.error(f"❌ Ошибка проверки токена: {e}")
+                return False
+        max_retries = 3
+        for _ in range(max_retries):
+            try:
+                response = await self.client.login(password=config.PASSWORD)
+                if isinstance(response, LoginResponse):
+                    logger.info(f"✅ Бот {config.USERNAME} залогинился")
+                    return True
+            except Exception as e:
+                logger.error(f"❌ Ошибка логина: {e}")
+                await asyncio.sleep(5)
+                
+            if _ < max_retries:
+                delay = 10 * (_ + 1)
+                logger.info(f"Повторная попытка логина через 5 секунд")
+                await asyncio.sleep(delay=delay)
+        
+        logger.error("❌ Все попытки логина провалились")
         return False
-
+        
     async def send_message(self, room_id: str, message: str):
         try:
             await self.client.room_send(
@@ -54,7 +83,7 @@ class MatrixVPNBot:
                 {"msgtype": "m.text", "body": message}
             )
         except Exception as e:
-            logger.error(f"Failed to send message: {e}")
+            logger.error(f"❌ Ошибка отправки сообщения: {e}")
 
     async def notify_admins(self, message: str):
         """Отправка уведомления администраторам в специальную комнату"""
@@ -66,10 +95,10 @@ class MatrixVPNBot:
                 if mentions:
                     full_message = f"⚠️ {mentions}\n{message}"
                 await self.send_message(config.ADMIN_ROOM_ID, full_message)
-                logger.info(f"Notification sent to admin room {config.ADMIN_ROOM_ID}")
+                logger.info(f"Уведомление отправлено в {config.ADMIN_ROOM_ID}")
                 return
             except Exception as e:
-                logger.error(f"Failed to send to admin room: {e}")
+                logger.error(f"Ошибка отправки уведомления: {e}")
         
         # Приоритет 2: Если ADMIN_ROOM_ID не задан, пробуем отправить в TARGET_ROOM
         if self.room_id:
@@ -77,9 +106,9 @@ class MatrixVPNBot:
                 mentions = " ".join(config.ADMIN_LOGINS) if config.ADMIN_LOGINS else ""
                 full_message = f"⚠️ {mentions}\n{message}" if mentions else f"⚠️ {message}"
                 await self.send_message(self.room_id, full_message)
-                logger.info(f"Notification sent to target room {self.room_id}")
+                logger.info(f"Уведомление отправлено в {self.room_id}")
             except Exception as e:
-                logger.error(f"Failed to send notification: {e}")
+                logger.error(f"Ошибка отправки уведомления: {e}")
 
     def extract_login(self, sender: str) -> str:
         try:
@@ -103,7 +132,7 @@ class MatrixVPNBot:
             )
             return is_in_group
         except Exception as e:
-            logger.error(f"LDAP check failed for {login}: {e}")
+            logger.error(f"Ошибка LDAP проверки прав доступа {login}: {e}")
             return False
 
     # ================= КОМАНДЫ ПОЛЬЗОВАТЕЛЯ =================
@@ -173,7 +202,7 @@ class MatrixVPNBot:
             self.state_manager.release(login)
             await self.send_message(room_id, "✅ Отключен")
         except Exception as e:
-            logger.error(f"RouterOS disconnect error: {e}", exc_info=True)
+            logger.error(f"RouterOS - ошибка отключения: {e}", exc_info=True)
             await self.send_message(room_id, f"❌ Ошибка отключения: {str(e)}")
 
     async def _cmd_status(self, room_id: str, login: str):
@@ -436,38 +465,7 @@ class MatrixVPNBot:
         except Exception as e:
             logger.error(f"Failed to join room {room_id}: {e}")
 
-    # Первый вариант
-    # async def run(self):
-    #     if not await self.login():
-    #         return
-        
-    #     logger.info("👂 Бот слушает сообщения...")
-    #     sync_token = None
-        
-    #     while True:
-    #         try:
-    #             response = await self.client.sync(timeout=30000, since=sync_token)
-                
-    #             if not isinstance(response, SyncResponse):
-    #                 await asyncio.sleep(5)
-    #                 continue
-                
-    #             sync_token = response.next_batch
-
-    #             # 1. Обработка приглашений (Личных сообщений)
-    #             for invite_id in response.rooms.invite.keys():
-    #                 await self.handle_invite(invite_id)
-
-    #             # 2. Обработка сообщений
-    #             for room_id, room_data in response.rooms.join.items():
-    #                 for event in room_data.timeline.events:
-    #                     if isinstance(event, RoomMessageText):
-    #                         await self.message_handler(room_id, event)
-
-    #         except Exception as e:
-    #             logger.error(f"❌ Ошибка в цикле синхронизации: {e}")
-    #             await asyncio.sleep(5)
-
+    
     # Второй вариант
     async def run(self):
         if not await self.login():
@@ -480,7 +478,7 @@ class MatrixVPNBot:
         # full_state=True восстанавливает контекст комнат, чтобы диалоги не ломались
         resp = await self.client.sync(timeout=30000, since=token, full_state=True)
         if not isinstance(resp, SyncResponse):
-            logger.error("❌ Initial sync failed"); return
+            logger.error("❌ Начальная синхронизация провалилась"); return
 
         token = resp.next_batch
         save_token(token)
@@ -494,7 +492,7 @@ class MatrixVPNBot:
                         continue
                     await self.message_handler(rid, ev)
 
-        logger.info("✅ State synced. Entering incremental loop...")
+        logger.info("✅ Синхронизация состояния выполнена. Вход в инкрементальный режим...")
 
         # 🔹 Дальше работаем в обычном инкрементальном режиме
         while True:
