@@ -26,6 +26,11 @@ ROUTER_CONFIG = {
     'port': int(config.ROUTEROS_PORT or 22),
     'username': config.ROUTEROS_USERNAME,
     'password': config.ROUTEROS_PASSWORD,
+    'global_delay_factor': 3,      # Увеличивает паузы между командами
+    'session_timeout': 30,         # Таймаут ожидания промпта
+    'fast_cli': False,
+    'allow_auto_change': True,     # 🔑 Ключевой параметр! Автоматически отключает терминальные баннеры
+    
 }
 
 class MatrixVPNBot:
@@ -165,9 +170,8 @@ class MatrixVPNBot:
         try:
             await asyncio.to_thread(
                 lambda: RouterOsClient(ROUTER_CONFIG).__enter__().add_to_address_list(
-                    address=client_ip,
-                    list_name=config.ROUTEROS_ADDRESSLIST,
-                    timeout=duration * 60
+                    ip=client_ip,
+                    list_name=config.ROUTEROS_ADDRESSLIST
                 )
             )
             await self.send_message(room_id, 

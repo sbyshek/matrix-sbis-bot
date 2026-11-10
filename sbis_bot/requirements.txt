@@ -1,5 +1,5 @@
 matrix-nio
 python-dotenv
 ldap3
-netmiko
 pydantic
+librouteros>=1.0.0
